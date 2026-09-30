@@ -13,6 +13,10 @@
 
 </div>
 
+<p align="center">
+  <img src="./.github/assets/demo.webp" alt="Turning manga pages on an unfolded foldable with Foldchiyomi's page curl" width="360"/>
+</p>
+
 Foldchiyomi is an unofficial fork of [Mihon](https://github.com/mihonapp/mihon), the manga reader, tuned for foldable phones and tablets. Unfold your phone and you get a two-page spread by default. Turn a page and it curls like a real one.
 
 Nothing else like it exists right now: page curls in other readers are canned animations, and none of them turn a two-page spread like a book. Here the page follows your finger.
