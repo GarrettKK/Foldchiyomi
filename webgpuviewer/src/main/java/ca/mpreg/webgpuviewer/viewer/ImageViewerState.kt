@@ -39,6 +39,7 @@ import ca.mpreg.webgpuviewer.transition.Transition
 import ca.mpreg.webgpuviewer.transition.TransitionBasic
 import ca.mpreg.webgpuviewer.transition.TurnGesture
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -46,6 +47,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 
 open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boolean = false) {
@@ -142,6 +144,7 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
             field = v
 
             if (pageDelta != 0) {
+                dropBubble()
                 onPageChange?.runCatching { invoke(if (isReversed) -pageDelta else pageDelta) }
             }
 
@@ -166,6 +169,7 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         // cancel() doesn't wait: a turn started while the last one unwinds would otherwise have
         // its own transitionFromPage - set just before this call - cleared by that finally.
         val id = ++turn
+        dropBubble()
         turnHeld = false
         turnAuto = true
         animationJob = scope?.launch {
@@ -204,6 +208,88 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
 
     /** Override for the "from" page during far navigation animation */
     var transitionFromPage: ImagePage? = null
+
+    /** Whether a double tap on a speech bubble opens it enlarged - see [showBubble]. */
+    var bubbleZoomEnabled: Boolean = true
+
+    /** The speech bubble open over the page, if any - see [BubbleZoom]. */
+    @Volatile
+    internal var bubble: BubbleOverlay? = null
+        private set
+
+    private var bubbleJob: Job? = null
+
+    /** True while a bubble is open, or closing: the next touch only closes it. */
+    val bubbleShown: Boolean get() = bubble != null
+
+    /**
+     * Opens the speech bubble under [tap] (normalised screen coordinates) enlarged over the page,
+     * as Google Play Books does. False where there is none - the page isn't at rest, or nothing
+     * there looks like a bubble - so the caller can zoom as usual instead.
+     */
+    suspend fun showBubble(tap: Offset): Boolean {
+        if (!bubbleZoomEnabled || pageOffset != 0f || bubble != null) return false
+        val page = getPage(0) as? ImagePage.ImageSingle ?: return false
+        val w = width
+        val h = height
+        if (w <= 0 || h <= 0) return false
+        val found = withContext(Dispatchers.Default) {
+            runCatching { BubbleZoom.detect(page, w, h, tap.x, tap.y) }
+                .onFailure { Log.w("ImageViewerState", "Bubble detection failed", it) }
+                .getOrNull()
+        } ?: return false
+        // The page may have turned while it looked.
+        if (getPage(0) !== page || pageOffset != 0f || bubble != null) return false
+        bubble = found
+        animateBubble(found, 1f)
+        return true
+    }
+
+    /** Closes the open bubble back into the page. */
+    fun dismissBubble() {
+        val current = bubble ?: return
+        animateBubble(current, 0f) {
+            if (bubble === current) {
+                bubble = null
+                releaseBubble(current)
+            }
+        }
+    }
+
+    /** Drops the open bubble at once, for a page that is going away. */
+    private fun dropBubble() {
+        val current = bubble ?: return
+        bubbleJob?.cancel()
+        bubble = null
+        releaseBubble(current)
+        invalidate()
+    }
+
+    private fun animateBubble(target: BubbleOverlay, to: Float, then: () -> Unit = {}) {
+        bubbleJob?.cancel()
+        bubbleJob = scope?.launch {
+            Animatable(target.progress).animateTo(
+                to, animationSpec = spring(
+                    dampingRatio = if (to > 0f) 0.78f else 1f,
+                    stiffness = Spring.StiffnessMediumLow,
+                    visibilityThreshold = 0.002f,
+                )
+            ) {
+                target.progress = value
+                invalidate()
+            }
+            then()
+            invalidate()
+        }
+    }
+
+    /** Its GPU resources go on the render thread, after any frame already drawing with them. */
+    private fun releaseBubble(overlay: BubbleOverlay) {
+        post {
+            overlay.release()
+            BubbleZoom.releaseTarget()
+        }
+    }
 
     // One instance for this state's lifetime, so [cleanup] can tell its own from a successor's.
     private val invalidateCallback: () -> Unit = { invalidate() }
@@ -352,6 +438,8 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         return RenderSnapshot(
             currentPage, adjacentPage, nextPage, offset, transition, firstPos, currentPos,
             TurnGesture(turnHeld, turnAuto, turnReleaseOffset),
+            bubble?.takeIf { offset == 0f && it.page === currentPage },
+            bubble?.progress ?: 0f,
         )
     }
 
@@ -370,6 +458,8 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         val firstPos: Offset,
         val currentPos: Offset,
         val gesture: TurnGesture,
+        val bubble: BubbleOverlay?,
+        val bubbleProgress: Float,
     )
 
     /**
@@ -438,6 +528,7 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         }
 
         val covered = page.drawLive(encoder, texture, tiles)
+        s.bubble?.let { BubbleZoom.draw(encoder, texture, it, s.bubbleProgress) }
 
         // Once the current page's tiles settle, prewarm the next page's, so a transition into it
         // starts mostly sharp. Gated on atHome: the tile cache is keyed by (x, y, scale).
@@ -465,6 +556,11 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
 
     fun cleanup() {
         animationJob?.cancel()
+        bubbleJob?.cancel()
+        bubble?.let { overlay ->
+            bubble = null
+            overlay.release()
+        }
         onScreenPages = emptyList()
         // Held by an object that outlives this state, so it has to be dropped by hand - but only
         // if it is still ours: a replacement viewer inits before the one it replaces cleans up.

@@ -2,6 +2,11 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
+## [v1.1.0] - Unreleased
+
+### Added
+- Bubble zoom: double-tap a speech bubble and it lifts off the page, enlarged and sharp, the way Google Play Books does it. Tap anywhere to put it back. Where the tap isn't on a bubble, double-tap zooms in as before.
+
 ## [v1.0.0] - 2026-09-30
 
 First release. Based on Mihon 0.20.4 with its unreleased changes as of late September 2026.
@@ -17,4 +22,5 @@ First release. Based on Mihon 0.20.4 with its unreleased changes as of late Sept
 ### Removed
 - Firebase analytics and crash reporting: never included in any build.
 
+[v1.1.0]: https://github.com/GarrettKK/Foldchiyomi/releases/tag/v1.1.0
 [v1.0.0]: https://github.com/GarrettKK/Foldchiyomi/releases/tag/v1.0.0

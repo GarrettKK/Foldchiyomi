@@ -92,6 +92,26 @@ fun ImageViewer(
 
             awaitEachGesture {
                 val firstDown = awaitFirstDown(pass = PointerEventPass.Initial)
+
+                // An open speech bubble takes the next touch - and the rest of a double tap - to
+                // close, and nothing else: no page turn, menu or zoom from the same tap.
+                if (state.bubbleShown) {
+                    state.dismissBubble()
+                    view.parent?.requestDisallowInterceptTouchEvent(true)
+                    firstDown.consume()
+                    do {
+                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                        event.changes.fastForEach { it.consume() }
+                    } while (event.changes.any { it.pressed })
+                    val again = waitForDown(doubleTapTimeout) ?: return@awaitEachGesture
+                    again.consume()
+                    do {
+                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                        event.changes.fastForEach { it.consume() }
+                    } while (event.changes.any { it.pressed })
+                    return@awaitEachGesture
+                }
+
                 val wasScrolling = state.pageOffset != 0f
                 val pageTurnJob = state.animationJob
                 val page = state.getPage(0) ?: return@awaitEachGesture
@@ -160,13 +180,17 @@ fun ImageViewer(
                     }
 
                     if (waitForCleanUp(secondDown.id, doubleTapTimeout, touchSlop) != null) {
-                        if (!state.doubleTapZoomEnabled) return@awaitEachGesture
                         // double tap — let any in-progress page turn finish committing first
                         val tapX = secondDown.position.x / state.width
                         val tapY = secondDown.position.y / state.height
                         scope.launch {
                             pageTurnJob?.join()
                             val zoomPage = state.getPage(0) ?: return@launch
+                            // On a speech bubble, open it enlarged instead - see BubbleZoom.
+                            if (zoomPage.atHomeScale && state.showBubble(Offset(tapX, tapY))) {
+                                return@launch
+                            }
+                            if (!state.doubleTapZoomEnabled) return@launch
                             if (zoomPage.atHomeScale) {
                                 zoomPage.animateTo(
                                     Offset(tapX, tapY), targetScale = zoomPage.doubleTapScale

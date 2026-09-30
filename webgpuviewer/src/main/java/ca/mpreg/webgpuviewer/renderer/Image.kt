@@ -78,6 +78,14 @@ class Image private constructor(
      */
     var trim: Rect? = null
 
+    /**
+     * A small greyscale copy of this image, for finding speech bubbles - see
+     * [ca.mpreg.webgpuviewer.viewer.BubbleZoom]. Null for HDR images and until pixels arrive.
+     */
+    @Volatile
+    var inkMap: InkMap? = null
+        internal set
+
     companion object {
         suspend operator fun invoke(
             pixels: ByteBuffer, width: Int, height: Int,
@@ -225,6 +233,9 @@ class Image private constructor(
             }
             image.trim = trim
             background?.let { image.backgroundColor = it }
+            if (!keepHdr) image.inkMap = withContext(Dispatchers.Default) {
+                InkMap.from(pixels, width, height)
+            }
 
             val levels = listOf(Level(pixels, width, height, 1f)) +
                     if (createMipMaps) smallerLevels(
@@ -363,6 +374,7 @@ class Image private constructor(
      */
     suspend fun update(pixels: ByteBuffer, rect: Rect? = null): Boolean {
         requireFullImage(pixels)
+        if (!isHdr) inkMap = withContext(Dispatchers.Default) { InkMap.from(pixels, width, height) }
         val levels = mipmaps.toList()
         val base = levels.firstOrNull() ?: return false
         val smaller =
@@ -472,13 +484,17 @@ class Image private constructor(
      * [ca.mpreg.webgpuviewer.viewer.ImagePage.ImageSingle.pageRect]) with no reason to touch mip/tile
      * selection.
      */
-    fun placement(dst: GPUTexture, x: Float, y: Float, scale: Float): FloatArray {
-        val adjustedX = x + this.x / dst.width + WebGpuRenderer.offsetX
-        val adjustedY = y + this.y / dst.height + WebGpuRenderer.offsetY
-        val x1 = 0.5f + scale * (adjustedX - 0.5f * width / dst.width)
-        val y1 = 0.5f + scale * (adjustedY - 0.5f * height / dst.height)
+    fun placement(dst: GPUTexture, x: Float, y: Float, scale: Float): FloatArray =
+        placement(dst.width, dst.height, x, y, scale)
+
+    /** As [placement], for a surface of [dstWidth] x [dstHeight] - for callers off the GPU thread. */
+    fun placement(dstWidth: Int, dstHeight: Int, x: Float, y: Float, scale: Float): FloatArray {
+        val adjustedX = x + this.x / dstWidth + WebGpuRenderer.offsetX
+        val adjustedY = y + this.y / dstHeight + WebGpuRenderer.offsetY
+        val x1 = 0.5f + scale * (adjustedX - 0.5f * width / dstWidth)
+        val y1 = 0.5f + scale * (adjustedY - 0.5f * height / dstHeight)
         return floatArrayOf(
-            x1, y1, x1 + scale * width / dst.width, y1 + scale * height / dst.height
+            x1, y1, x1 + scale * width / dstWidth, y1 + scale * height / dstHeight
         )
     }
 
