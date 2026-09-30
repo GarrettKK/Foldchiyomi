@@ -104,6 +104,22 @@ abstract class Transition {
         tiles: TileRenderer,
     )
 
+    /**
+     * As the plain [render], with what the finger is doing - for a transition that follows it, like
+     * [TransitionCurl]. Everything else ignores [gesture].
+     */
+    internal open fun render(
+        page1: ImagePage,
+        page2: ImagePage,
+        encoder: GPUCommandEncoder,
+        dst: GPUTexture,
+        frac: Float,
+        pos1: Offset,
+        pos2: Offset,
+        tiles: TileRenderer,
+        gesture: TurnGesture,
+    ) = render(page1, page2, encoder, dst, frac, pos1, pos2, tiles)
+
     companion object {
         // Shared blit pipeline for all transitions
         private val blitPipelines = FormatKeyed { format ->
@@ -674,3 +690,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         }
     }
 }
+
+/** How a page turn is being driven this frame - see [Transition.render]. */
+internal class TurnGesture(
+    /** A finger holds the turn: pos2 is where it is now, pos1 where it took hold. */
+    val held: Boolean,
+    /** Started by a tap or key rather than a drag: no finger to follow at all. */
+    val auto: Boolean,
+    /** The frac the finger let go at, when neither [held] nor [auto]. */
+    val releaseFrac: Float,
+)

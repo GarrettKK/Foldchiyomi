@@ -305,6 +305,9 @@ fun ImageViewer(
                     // If grabbing mid-animation, update firstPos so panning continues smoothly
                     if (wasScrolling) {
                         state.firstPos = firstDown.position
+                        state.currentPos = firstDown.position
+                        state.turnHeld = true
+                        state.turnAuto = false
                     }
 
                     val velocityTracker = VelocityTracker()
@@ -376,6 +379,8 @@ fun ImageViewer(
                                         acc = Offset.Zero
                                     }
                                     state.currentPos = event.changes[0].position
+                                    state.turnHeld = true
+                                    state.turnAuto = false
                                     state.invalidate()
                                     event.changes.fastForEach { if (it.positionChanged()) it.consume() }
                                 } else {
@@ -415,6 +420,9 @@ fun ImageViewer(
                                                 page.animateTo(Offset(0.5f, 0.5f))
                                                 pageTurning = true
                                                 state.firstPos = firstDown.position
+                                                state.currentPos = event.changes[0].position
+                                                state.turnHeld = true
+                                                state.turnAuto = false
                                                 state.pageOffset += -overflow * page.scale
                                                 state.invalidate()
                                             }
@@ -435,6 +443,11 @@ fun ImageViewer(
                     }
 
                     longPressJob?.cancel()
+                    // The finger is off: a curl settles from wherever it let go.
+                    if (state.turnHeld) {
+                        state.turnReleaseOffset = state.pageOffset
+                        state.turnHeld = false
+                    }
                     if (longPressed || canceled) return@awaitEachGesture
 
                     if (pageTurning) {

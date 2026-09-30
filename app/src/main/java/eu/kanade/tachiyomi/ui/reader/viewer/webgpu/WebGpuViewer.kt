@@ -24,9 +24,9 @@ import ca.mpreg.webgpuviewer.renderer.Image
 import ca.mpreg.webgpuviewer.transition.TransitionBasic
 import ca.mpreg.webgpuviewer.transition.TransitionCube
 import ca.mpreg.webgpuviewer.transition.TransitionCubeOuter
+import ca.mpreg.webgpuviewer.transition.TransitionCurl
 import ca.mpreg.webgpuviewer.transition.TransitionFade
 import ca.mpreg.webgpuviewer.transition.TransitionFadeWhite
-import ca.mpreg.webgpuviewer.transition.TransitionFlip
 import ca.mpreg.webgpuviewer.transition.TransitionFlipLeft
 import ca.mpreg.webgpuviewer.transition.TransitionFlipRight
 import ca.mpreg.webgpuviewer.transition.TransitionNone
@@ -974,7 +974,7 @@ open class WebGpuViewer(
             pager.state.apply {
                 transition = when (if (isDual) config.transitionAnimationDual else config.transitionAnimation) {
                     TransitionAnimation.BASIC -> if (isVertical) TransitionBasic.Vertical else TransitionBasic
-                    TransitionAnimation.FLIP -> TransitionFlip
+                    TransitionAnimation.FLIP -> TransitionCurl
                     TransitionAnimation.FLIP_LEFT -> TransitionFlipLeft
                     TransitionAnimation.FLIP_RIGHT -> TransitionFlipRight
                     TransitionAnimation.STACK_LEFT -> TransitionStackLeft

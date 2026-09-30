@@ -4,7 +4,7 @@ Curliyomi is a personal Android reader fork based on [Mihon](https://github.com/
 
 ## Reader defaults
 
-- The WebGPU reader uses an interactive, touch-tracked page curl (`TransitionFlip`). Drag a page edge to follow the turn, then release to complete or cancel it.
+- The WebGPU reader uses an interactive page curl in the style of Google Play Books (`TransitionCurl`). Take a page by its edge or corner and it rolls over after your finger, showing its back and casting a shadow on the page underneath; release to complete or cancel the turn. Taps and volume keys play the same curl from the bottom corner.
 - Two-page spreads are enabled by default. The existing per-series reading settings can still change this.
 - Existing Mihon/Tachiyomi-compatible extension repositories and extension packages are supported by the inherited repository manager.
 
@@ -19,6 +19,10 @@ Use JDK 21, Android SDK, and the Android SDK components required by the project.
 ```
 
 The APK is written under `app/build/outputs/apk/foss/`.
+
+## WebGPU viewer module
+
+The page viewer (`ca.mpreg:webgpuviewer`, MIT) is carried in-tree as the `:webgpuviewer` module, taken from upstream tag 49, so the reader can have its own transition. Its prebuilt native library `libresize.so` is extracted at build time from the published 49 AAR; `androidx.webgpu` comes from the upstream's Maven repository.
 
 ## Upstream and license
 

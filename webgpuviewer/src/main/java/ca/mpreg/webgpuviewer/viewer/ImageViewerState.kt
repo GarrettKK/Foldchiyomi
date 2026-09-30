@@ -37,6 +37,7 @@ import ca.mpreg.webgpuviewer.renderer.WebGpuRenderer.Companion.dispatcher
 import ca.mpreg.webgpuviewer.renderer.endAndRelease
 import ca.mpreg.webgpuviewer.transition.Transition
 import ca.mpreg.webgpuviewer.transition.TransitionBasic
+import ca.mpreg.webgpuviewer.transition.TurnGesture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -165,6 +166,8 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         // cancel() doesn't wait: a turn started while the last one unwinds would otherwise have
         // its own transitionFromPage - set just before this call - cleared by that finally.
         val id = ++turn
+        turnHeld = false
+        turnAuto = true
         animationJob = scope?.launch {
             setPageOffsetDirect(direction.toFloat())
             invalidate()
@@ -245,6 +248,18 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
 
     var firstPos = Offset.Zero
     var currentPos = Offset.Zero
+
+    /** A finger is on the page turn right now - [currentPos] is where it is. */
+    @Volatile
+    var turnHeld = false
+
+    /** [pageOffset] when the finger last let go of a turn - where its settle started from. */
+    @Volatile
+    var turnReleaseOffset = 0f
+
+    /** The turn in flight came from [animatePageTurn] (a tap or key), not a drag. */
+    @Volatile
+    var turnAuto = false
 
     var transition: Transition = if (isVertical) TransitionBasic.Vertical else TransitionBasic
 
@@ -335,7 +350,8 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         val nextPage = if (offset == 0f) getPage(1) else null
         onScreenPages = listOfNotNull(currentPage, adjacentPage)
         return RenderSnapshot(
-            currentPage, adjacentPage, nextPage, offset, transition, firstPos, currentPos
+            currentPage, adjacentPage, nextPage, offset, transition, firstPos, currentPos,
+            TurnGesture(turnHeld, turnAuto, turnReleaseOffset),
         )
     }
 
@@ -353,6 +369,7 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         val transition: Transition,
         val firstPos: Offset,
         val currentPos: Offset,
+        val gesture: TurnGesture,
     )
 
     /**
@@ -414,7 +431,8 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
 
         if (s.adjacentPage != null && s.offset != 0f) {
             s.transition.render(
-                page, s.adjacentPage, encoder, texture, s.offset, s.firstPos, s.currentPos, tiles
+                page, s.adjacentPage, encoder, texture, s.offset, s.firstPos, s.currentPos, tiles,
+                s.gesture,
             )
             return
         }

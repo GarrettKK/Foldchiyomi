@@ -290,7 +290,7 @@ dependencies {
     }
     implementation(libs.image.decoder)
 
-    implementation(libs.webgpuviewer)
+    implementation(projects.webgpuviewer)
 
     // UI libraries
     implementation(libs.material)
