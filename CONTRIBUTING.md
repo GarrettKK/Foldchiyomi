@@ -1,49 +1,22 @@
-Looking to report an issue/bug or make a feature request? Please refer to the [README file](https://github.com/mihonapp/mihon#issues-feature-requests-and-contributing).
+# Contributing
 
----
+Thanks for your interest in Foldchiyomi!
 
-Thanks for your interest in contributing to Mihon!
+- **Bugs and ideas:** open an [issue](https://github.com/GarrettKK/Foldchiyomi/issues/new/choose). For bugs, please include your device and whether it was folded or unfolded.
+- **Pull requests** are welcome. Keep them focused, and describe how you tested on a real device.
+- **Extensions and sources** are not part of this project, and problems with them can't be fixed here.
 
+Foldchiyomi is a fork of [Mihon](https://github.com/mihonapp/mihon). Please don't report Foldchiyomi issues to the Mihon team. If a bug also happens in Mihon itself, report it there.
 
-# Code contributions
+## Building
 
-Pull requests are welcome!
+Use JDK 21 and the Android SDK, then run:
 
-If you're interested in taking on [an open issue](https://github.com/mihonapp/mihon/issues), please comment on it so others are aware.
-You do not need to ask for permission nor an assignment.
+```sh
+./gradlew assembleFoss -Pdist=foss
+```
 
-## Prerequisites
+## Releasing
 
-Before you start, please note that the ability to use following technologies is **required** and that existing contributors will not actively teach them to you.
-
-- Basic [Android development](https://developer.android.com/)
-- [Kotlin](https://kotlinlang.org/)
-
-### Tools
-
-- [Android Studio](https://developer.android.com/studio)
-- Emulator or phone with developer options enabled to test changes.
-
-## Getting help
-
-- Join [the Discord server](https://discord.gg/mihon) for online help and to ask questions while developing.
-
-# Translations
-
-Translations are done externally via Weblate. See [our website](https://mihon.app/docs/contribute#translation) for more details.
-
-
-# Forks
-
-Forks are allowed so long as they abide by [the project's LICENSE](https://github.com/mihonapp/mihon/blob/main/LICENSE).
-
-When creating a fork, remember to:
-
-- To avoid confusion with the main app:
-    - Change the app name
-    - Change the app icon
-    - Change or disable the [app update checker](https://github.com/mihonapp/mihon/blob/main/app/src/main/java/eu/kanade/tachiyomi/data/updater/AppUpdateChecker.kt)
-- To avoid installation conflicts:
-    - Change the `applicationId` in [`build.gradle.kts`](https://github.com/mihonapp/mihon/blob/main/app/build.gradle.kts)
-- To avoid having your data polluting the main app's analytics and crash report services:
-    - If you want to use Firebase analytics, replace [`google-services.json`](https://github.com/mihonapp/mihon/blob/main/app/src/standard/google-services.json) with your own
+1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`, add a section to `CHANGELOG.md`, and merge.
+2. Publish a GitHub release on `main` with a new tag `v<versionName>` (e.g. `v1.0.1`). `release.yml` builds, signs and attaches the APKs.

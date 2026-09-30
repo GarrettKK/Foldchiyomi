@@ -3,6 +3,6 @@ contact_links:
   - name: ❌ Help with Extensions
     url: https://mihon.app/docs/faq/browse/extensions
     about: For extension-related questions/issues
-  - name: 🖥️ Mihon website
-    url: https://mihon.app/
-    about: Guides, troubleshooting, and answers to common questions
+  - name: 🖥️ Mihon FAQ
+    url: https://mihon.app/docs/faq/general
+    about: Foldchiyomi works like Mihon - its guides and FAQ apply here too
