@@ -1,0 +1,114 @@
+name: Release Foldchiyomi
+
+# Push a tag named after the app's versionName (e.g. v1.0.0) to publish a release.
+#
+# Needs four repository secrets (Settings -> Secrets and variables -> Actions), so every release is
+# signed with the same key and installs over the last one:
+#   SIGNING_KEY         the release keystore, base64-encoded (base64 -w0 foldchiyomi.jks)
+#   KEY_STORE_PASSWORD  the keystore's password
+#   ALIAS               the key's alias
+#   KEY_PASSWORD        the key's password
+on:
+  push:
+    tags:
+      - v*
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      # Makes app/build.gradle.kts sign with the keystore below instead of a throwaway debug key.
+      MIHON_GITHUB_RELEASE: true
+      TAG: ${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the app version
+        run: |
+          version=$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG does not match versionName $version in app/build.gradle.kts - the in-app updater would keep offering this release."
+            exit 1
+          fi
+
+      - name: Check signing secrets
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          for name in SIGNING_KEY KEY_STORE_PASSWORD ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name is not set - see the top of .github/workflows/release.yml."
+              exit 1
+            fi
+          done
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          # A release is built from a clean cache.
+          cache-disabled: true
+
+      - name: Decode signing keystore
+        run: echo "$SIGNING_KEY" | base64 -d > "$RUNNER_TEMP/foldchiyomi.jks"
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleFoss -Pdist=foss --stacktrace
+        env:
+          storeFile: ${{ runner.temp }}/foldchiyomi.jks
+          storePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyAlias: ${{ secrets.ALIAS }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Rename APKs
+        run: |
+          set -e
+          out=app/build/outputs/apk/foss
+          for abi in universal arm64-v8a armeabi-v7a x86 x86_64; do
+            mv "$out/app-$abi-foss.apk" "Foldchiyomi-$TAG-$abi.apk"
+          done
+          sha256sum Foldchiyomi-*.apk > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/foldchiyomi.jks"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Foldchiyomi ${{ github.ref_name }}
+          body: |
+            Mihon for foldables, with a page curl that follows your finger.
+
+            **Which file?** `Foldchiyomi-${{ github.ref_name }}-arm64-v8a.apk` for almost every modern phone. If you're not sure, `Foldchiyomi-${{ github.ref_name }}-universal.apk` works everywhere.
+
+            No analytics, no crash reporting. Built by GitHub Actions from this tag; checksums are in `SHA256SUMS.txt`.
+
+            <!-->
+          files: |
+            Foldchiyomi-*.apk
+            SHA256SUMS.txt
+          draft: false
+          prerelease: false

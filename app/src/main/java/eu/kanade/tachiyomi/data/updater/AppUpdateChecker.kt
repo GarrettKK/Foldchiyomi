@@ -35,13 +35,8 @@ class AppUpdateChecker(
     }
 }
 
-val GITHUB_REPO: String by lazy {
-    if (isNightlyBuildType) {
-        "mihonapp/mihon-preview"
-    } else {
-        "mihonapp/mihon"
-    }
-}
+// Foldchiyomi releases, not Mihon's: an upstream APK would replace the page curl.
+const val GITHUB_REPO: String = "GarrettKK/Foldchiyomi"
 
 val RELEASE_TAG: String by lazy {
     if (isNightlyBuildType) {

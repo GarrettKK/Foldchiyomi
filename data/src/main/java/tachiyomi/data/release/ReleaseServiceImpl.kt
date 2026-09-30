@@ -30,7 +30,7 @@ class ReleaseServiceImpl(
                 .parseAs<GithubRelease>()
         }
 
-        val downloadLink = getDownloadLink(release = release, isFoss = arguments.isFoss) ?: return null
+        val downloadLink = getDownloadLink(release = release) ?: return null
 
         return Release(
             version = release.version,
@@ -42,16 +42,13 @@ class ReleaseServiceImpl(
         )
     }
 
-    private fun getDownloadLink(release: GithubRelease, isFoss: Boolean): String? {
+    private fun getDownloadLink(release: GithubRelease): String? {
         val map = release.assets.associate { asset ->
             BUILD_TYPES.find { "-$it" in asset.name } to asset.downloadLink
         }
 
-        return if (!isFoss) {
-            map[Build.SUPPORTED_ABIS[0]] ?: map[null]
-        } else {
-            map[FOSS]
-        }
+        // Foldchiyomi ships its foss build split per ABI as well, so it updates the same way.
+        return map[Build.SUPPORTED_ABIS[0]] ?: map[FOSS] ?: map[null]
     }
 
     companion object {
