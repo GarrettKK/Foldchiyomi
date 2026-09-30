@@ -21,10 +21,32 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # With the release key, when the repository has it: a test build then installs over a
+      # released one and keeps its library, instead of needing an uninstall first.
+      - name: Decode signing keystore
+        id: signing
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          if [ -n "$SIGNING_KEY" ]; then
+            echo "$SIGNING_KEY" | base64 -d > "$RUNNER_TEMP/foldchiyomi.jks"
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build APK
         run: |
           chmod +x gradlew
           ./gradlew assembleFoss --stacktrace
+        env:
+          MIHON_GITHUB_RELEASE: ${{ steps.signing.outputs.enabled }}
+          storeFile: ${{ runner.temp }}/foldchiyomi.jks
+          storePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyAlias: ${{ secrets.ALIAS }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/foldchiyomi.jks"
 
       - uses: actions/upload-artifact@v4
         with:
