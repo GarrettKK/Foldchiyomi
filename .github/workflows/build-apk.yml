@@ -2,8 +2,10 @@ name: Build Curliyomi APK
 
 on:
   workflow_dispatch:
-  push:
+  pull_request:
     branches: [main, master]
+  push:
+    branches: [main, master, codex/google-books-page-curl]
 
 jobs:
   build:
