@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./.github/assets/foldchiyomi.png" alt="Foldchiyomi icon" width="96"/>
+
 # Foldchiyomi
 
 ### Mihon, made for foldables — with a page turn that feels like paper
@@ -24,6 +26,10 @@ Nothing else like it exists right now: page curls in other readers are canned an
 - **Native and fast.** It runs entirely on the GPU (WebGPU via Dawn) inside the reader's own renderer, not as a video overlay or a screenshot trick. That keeps it smooth at your screen's full refresh rate.
 
 It is the default page transition. You can pick another one, or turn animations off, in the reader settings.
+
+## The icon
+
+折 (*ori*) means "to fold": the fold of the phone, and the fold of the page.
 
 ## Everything else is Mihon
 
@@ -67,6 +73,8 @@ Pushing a `v*` tag builds, signs and publishes a release. See [`.github/workflow
 
 - [Mihon](https://github.com/mihonapp/mihon) and the Tachiyomi project, Apache-2.0: the whole app this is built on.
 - [webgpuviewer](https://github.com/mpreg-ca/webgpuviewer) by w, MIT: the WebGPU page viewer the curl is built into. It is carried in-tree as the `:webgpuviewer` module, taken from upstream tag 49, with its license in [`webgpuviewer/LICENSE`](webgpuviewer/LICENSE). Its prebuilt native library `libresize.so` is taken from the published 49 AAR at build time.
+
+- The 折 in the icon is drawn from [Noto Serif JP](https://github.com/notofonts/noto-cjk) (SIL Open Font License 1.1).
 
 Foldchiyomi is not affiliated with or endorsed by the Mihon project. The developer(s) of this application have no affiliation with the content providers available, and this application hosts zero content.
 
