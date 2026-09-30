@@ -22,4 +22,4 @@ The APK is written under `app/build/outputs/apk/foss/`.
 
 ## Upstream and license
 
-This project retains the upstream source and its notices. See `LICENSE` and the upstream repository for the complete license and third-party notices. Changes in this fork are limited to app identity and reader defaults/labels.
+This project retains the upstream source and its notices. See `LICENSE` and the upstream repository for the complete license and third-party notices. The app vendors the MIT-licensed WebGPU viewer in `webgpuviewer/` so the page-turn mesh can respond to the drag position. The curl uses more vertical mesh slices and tightens around the finger, while retaining the upstream renderer for image decoding, page spreads, and shadows.
