@@ -22,7 +22,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven(url = "https://raw.githubusercontent.com/mpreg-ca/androidx-webgpu-repo/main")
         maven(url = "https://www.jitpack.io")
     }
 }
@@ -46,4 +45,3 @@ include(":presentation-widget")
 include(":source-api")
 include(":source-local")
 include(":telemetry")
-include(":webgpuviewer")
