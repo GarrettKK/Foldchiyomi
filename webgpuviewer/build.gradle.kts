@@ -47,6 +47,6 @@ dependencies {
     api(libs.androidx.compose.foundation)
     api(libs.androidx.webgpu)
 
-    implementation(libs.androidx.annotation.experimental)
+    implementation("androidx.annotation:annotation-experimental:1.6.0")
     implementation(libs.kotlinx.coroutines.core)
 }
