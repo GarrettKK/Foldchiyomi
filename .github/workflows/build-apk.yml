@@ -1,4 +1,4 @@
-name: Build Curliyomi APK
+name: Build Foldchiyomi test APK
 
 on:
   workflow_dispatch:
@@ -28,5 +28,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: curliyomi-apk
+          name: foldchiyomi-test-apk
           path: app/build/outputs/apk/foss/*.apk
