@@ -204,10 +204,12 @@ object SettingsReaderScreen : SearchableSettings {
         val imageScaleType by imageScaleTypePref.collectAsState()
         val dualPageSplit by dualPageSplitPref.collectAsState()
         val rotateToFit by rotateToFitPref.collectAsState()
+        // The WebGPU reader can't split or rotate wide pages, and has scale types of its own.
+        val webGpu by LocalContext.current.appGraph.basePreferences.highQualityRenderer.collectAsState()
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pager_viewer),
-            preferenceItems = listOf(
+            preferenceItems = listOfNotNull(
                 Preference.PreferenceItem.ListPreference(
                     preference = navModePref,
                     entries = ReaderPreferences.TapZones
@@ -230,9 +232,12 @@ object SettingsReaderScreen : SearchableSettings {
                 Preference.PreferenceItem.ListPreference(
                     preference = imageScaleTypePref,
                     entries = ReaderPreferences.ImageScaleType
-                        .mapIndexed { index, it -> index + 1 to stringResource(it) }
-                        .toMap(),
+                        .mapIndexed { index, it -> index + 1 to it }
+                        .filter { (_, it) -> !webGpu || it in ReaderPreferences.ImageScaleTypeWebGpuViewer }
+                        .associate { (index, it) -> index to stringResource(it) },
                     title = stringResource(MR.strings.pref_image_scale_type),
+                    // The current choice, as by default - and for WebGPU, that a spread always fits.
+                    subtitle = if (webGpu) "%s (" + stringResource(MR.strings.pref_image_scale_type_single) + ")" else "%s",
                 ),
                 Preference.PreferenceItem.ListPreference(
                     preference = readerPreferences.zoomStart,
@@ -256,10 +261,19 @@ object SettingsReaderScreen : SearchableSettings {
                     enabled = navMode != 5,
                 ),
                 Preference.PreferenceItem.SwitchPreference(
+                    preference = readerPreferences.pagerDoubleTapZoomEnabled,
+                    title = stringResource(MR.strings.pref_double_tap_zoom),
+                ).takeIf { webGpu },
+                Preference.PreferenceItem.SwitchPreference(
                     preference = readerPreferences.bubbleZoom,
                     title = stringResource(MR.strings.pref_bubble_zoom),
                     subtitle = stringResource(MR.strings.pref_bubble_zoom_summary),
                 ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = readerPreferences.dualPageView,
+                    entries = ReaderPreferences.DualPageView.entries.associateWith { stringResource(it.titleRes) },
+                    title = stringResource(MR.strings.pref_dual_page_view),
+                ).takeIf { webGpu },
                 Preference.PreferenceItem.SwitchPreference(
                     preference = dualPageSplitPref,
                     title = stringResource(MR.strings.pref_dual_page_split),
@@ -267,13 +281,13 @@ object SettingsReaderScreen : SearchableSettings {
                         rotateToFitPref.set(false)
                         true
                     },
-                ),
+                ).takeIf { !webGpu },
                 Preference.PreferenceItem.SwitchPreference(
                     preference = readerPreferences.dualPageInvertPaged,
                     title = stringResource(MR.strings.pref_dual_page_invert),
                     subtitle = stringResource(MR.strings.pref_dual_page_invert_summary),
                     enabled = dualPageSplit,
-                ),
+                ).takeIf { !webGpu },
                 Preference.PreferenceItem.SwitchPreference(
                     preference = rotateToFitPref,
                     title = stringResource(MR.strings.pref_page_rotate),
@@ -281,12 +295,12 @@ object SettingsReaderScreen : SearchableSettings {
                         dualPageSplitPref.set(false)
                         true
                     },
-                ),
+                ).takeIf { !webGpu },
                 Preference.PreferenceItem.SwitchPreference(
                     preference = readerPreferences.dualPageRotateToFitInvert,
                     title = stringResource(MR.strings.pref_page_rotate_invert),
                     enabled = rotateToFit,
-                ),
+                ).takeIf { !webGpu },
             ),
         )
     }
@@ -304,10 +318,13 @@ object SettingsReaderScreen : SearchableSettings {
         val dualPageSplit by dualPageSplitPref.collectAsState()
         val rotateToFit by rotateToFitPref.collectAsState()
         val webtoonSidePadding by webtoonSidePaddingPref.collectAsState()
+        // What the WebGPU reader has no use for: it sets the page width itself, and doesn't hide
+        // the menu on scroll or split and rotate wide pages.
+        val webGpu by LocalContext.current.appGraph.basePreferences.highQualityRenderer.collectAsState()
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.webtoon_viewer),
-            preferenceItems = listOf(
+            preferenceItems = listOfNotNull(
                 Preference.PreferenceItem.ListPreference(
                     preference = navModePref,
                     entries = ReaderPreferences.TapZones
@@ -335,7 +352,7 @@ object SettingsReaderScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_webtoon_side_padding),
                     valueString = numberFormat.format(webtoonSidePadding / 100f),
                     onValueChanged = { webtoonSidePaddingPref.set(it) },
-                ),
+                ).takeIf { !webGpu },
                 Preference.PreferenceItem.ListPreference(
                     preference = readerPreferences.readerHideThreshold,
                     entries = mapOf(
@@ -345,7 +362,7 @@ object SettingsReaderScreen : SearchableSettings {
                         ReaderPreferences.ReaderHideThreshold.LOWEST to stringResource(MR.strings.pref_lowest),
                     ),
                     title = stringResource(MR.strings.pref_hide_threshold),
-                ),
+                ).takeIf { !webGpu },
                 Preference.PreferenceItem.SwitchPreference(
                     preference = readerPreferences.cropBordersWebtoon,
                     title = stringResource(MR.strings.pref_crop_borders),
@@ -357,13 +374,13 @@ object SettingsReaderScreen : SearchableSettings {
                         rotateToFitPref.set(false)
                         true
                     },
-                ),
+                ).takeIf { !webGpu },
                 Preference.PreferenceItem.SwitchPreference(
                     preference = readerPreferences.dualPageInvertWebtoon,
                     title = stringResource(MR.strings.pref_dual_page_invert),
                     subtitle = stringResource(MR.strings.pref_dual_page_invert_summary),
                     enabled = dualPageSplit,
-                ),
+                ).takeIf { !webGpu },
                 Preference.PreferenceItem.SwitchPreference(
                     preference = rotateToFitPref,
                     title = stringResource(MR.strings.pref_page_rotate),
@@ -371,12 +388,12 @@ object SettingsReaderScreen : SearchableSettings {
                         dualPageSplitPref.set(false)
                         true
                     },
-                ),
+                ).takeIf { !webGpu },
                 Preference.PreferenceItem.SwitchPreference(
                     preference = readerPreferences.dualPageRotateToFitInvertWebtoon,
                     title = stringResource(MR.strings.pref_page_rotate_invert),
                     enabled = rotateToFit,
-                ),
+                ).takeIf { !webGpu },
                 Preference.PreferenceItem.SwitchPreference(
                     preference = readerPreferences.webtoonDoubleTapZoomEnabled,
                     title = stringResource(MR.strings.pref_double_tap_zoom),
