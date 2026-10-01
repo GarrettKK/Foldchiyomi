@@ -4,6 +4,10 @@ import android.content.res.Resources
 import android.util.Log
 import android.view.Surface
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.MonotonicFrameClock
@@ -103,6 +107,18 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
      * returns home - for a reader that would rather double tap did nothing at all.
      */
     var doubleTapZoomEnabled: Boolean = true
+
+    /**
+     * How long a double tap's zoom takes, in milliseconds: 500 and over springs as it always has,
+     * 1 and under is instant, anything between eases over that long.
+     */
+    var doubleTapZoomMillis: Int = 500
+
+    internal fun doubleTapZoomSpec(): AnimationSpec<Float> = when {
+        doubleTapZoomMillis >= 500 -> spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = 0.002f)
+        doubleTapZoomMillis <= 1 -> snap()
+        else -> tween(doubleTapZoomMillis, easing = FastOutSlowInEasing)
+    }
 
     /** Whether two fingers scale the page. Off leaves the page at whatever scale it is on. */
     var pinchZoomEnabled: Boolean = true

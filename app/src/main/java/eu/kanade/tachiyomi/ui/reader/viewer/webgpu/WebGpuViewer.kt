@@ -986,6 +986,13 @@ open class WebGpuViewer(
         pager.state.bubbleZoomEnabled = config.bubbleZoom
         config.bubbleZoomChangedListener = { pager.state.bubbleZoomEnabled = it }
 
+        fun applyDoubleTap() {
+            pager.state.doubleTapZoomEnabled = config.doubleTapZoom
+            pager.state.doubleTapZoomMillis = config.doubleTapAnimDuration
+        }
+        applyDoubleTap()
+        config.doubleTapChangedListener = ::applyDoubleTap
+
         config.imagePropertyChangedListener = {
             // A theme change comes through here.
             cachedBackgroundColor = null
@@ -993,7 +1000,8 @@ open class WebGpuViewer(
 
             val isDual = isDualPageMode()
             pager.state.apply {
-                transition = when (if (isDual) config.transitionAnimationDual else config.transitionAnimation) {
+                val animation = if (isDual) config.transitionAnimationDual else config.transitionAnimation
+                transition = when (if (config.usePageTransitions) animation else TransitionAnimation.NONE) {
                     TransitionAnimation.BASIC -> if (isVertical) TransitionBasic.Vertical else TransitionBasic
                     TransitionAnimation.FLIP -> TransitionCurl
                     TransitionAnimation.FLIP_LEFT -> TransitionFlipLeft

@@ -309,17 +309,37 @@ private fun ColumnScope.WebGpuViewerSettings(viewModel: ReaderSettingsViewModel)
         },
     )
     val isDual = (viewer as? WebGpuViewer)?.isDualPageMode() == true
+    val continuous = resolved == ReadingMode.WEBTOON || resolved == ReadingMode.CONTINUOUS_VERTICAL
 
-    val navigationModePager by viewModel.preferences.navigationModePager.collectAsState()
-    val pagerNavInverted by viewModel.preferences.pagerNavInverted.collectAsState()
+    // The webtoon modes read the webtoon section's settings, as WebGpuConfig does.
+    val navigationModePref =
+        if (continuous) viewModel.preferences.navigationModeWebtoon else viewModel.preferences.navigationModePager
+    val navInvertedPref =
+        if (continuous) viewModel.preferences.webtoonNavInverted else viewModel.preferences.pagerNavInverted
+    val navigationMode by navigationModePref.collectAsState()
+    val navInverted by navInvertedPref.collectAsState()
     TapZonesItems(
-        selected = navigationModePager,
-        onSelect = viewModel.preferences.navigationModePager::set,
-        invertMode = pagerNavInverted,
-        onSelectInvertMode = viewModel.preferences.pagerNavInverted::set,
+        selected = navigationMode,
+        onSelect = navigationModePref::set,
+        invertMode = navInverted,
+        onSelectInvertMode = navInvertedPref::set,
     )
 
-    if (resolved != ReadingMode.WEBTOON && resolved != ReadingMode.CONTINUOUS_VERTICAL) {
+    CheckboxItem(
+        label = stringResource(MR.strings.pref_double_tap_zoom),
+        pref = if (continuous) {
+            viewModel.preferences.webtoonDoubleTapZoomEnabled
+        } else {
+            viewModel.preferences.pagerDoubleTapZoomEnabled
+        },
+    )
+
+    if (continuous) {
+        CheckboxItem(
+            label = stringResource(MR.strings.pref_crop_borders),
+            pref = viewModel.preferences.cropBordersWebtoon,
+        )
+    } else {
         CheckboxItem(
             label = stringResource(MR.strings.pref_bubble_zoom),
             pref = viewModel.preferences.bubbleZoom,

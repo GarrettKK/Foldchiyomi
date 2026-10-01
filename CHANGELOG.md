@@ -2,7 +2,18 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
-## [v1.3.1] - Unreleased
+## [v1.3.2] - Unreleased
+
+### Fixed
+- Reader settings that did nothing now work, or are hidden where they can't. Some were left over from Mihon's older readers and never reached Foldchiyomi's.
+  - **Double tap to zoom** can be turned off in the paged reader too, and the webtoon switch now works. Bubble zoom still opens bubbles with it off.
+  - **Double tap animation speed** applies.
+  - **Animate page transitions** off turns page turns into a cut.
+  - In the webtoon modes, tap zones, inverted tapping and crop borders follow the **Webtoon** section's settings, as the settings screen says they do.
+  - Hidden while the high-quality renderer is on, since it has no use for them: splitting and rotating wide pages, webtoon side padding (the reader's own page width slider replaces it) and the menu-hide sensitivity. Scale type lists only the types it supports, and notes that a two-page spread always fits the screen.
+  - **Dual page view** is in Settings → Reader → Paged as well as in the reader's sheet.
+
+## [v1.3.1] - 2026-10-01
 
 ### Improved
 - Bubble zoom works on Western comics. Their lettering is denser and runs into the bubble's outline, bubbles get joined together, and some have spiky outlines; most of those were skipped. On a page of *Batman: Year One*, 25 of 26 bubbles and narration boxes now open, up from 11, while lettering laid straight over artwork still doesn't.

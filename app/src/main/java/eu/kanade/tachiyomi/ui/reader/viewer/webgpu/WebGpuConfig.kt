@@ -75,6 +75,15 @@ class WebGpuConfig(
 
     var bubbleZoomChangedListener: ((Boolean) -> Unit)? = null
 
+    var doubleTapZoom = true
+        private set
+
+    /** Double tap to zoom, and how fast it zooms - see [ViewerConfig.doubleTapAnimDuration]. */
+    var doubleTapChangedListener: (() -> Unit)? = null
+
+    /** The webtoon modes read the webtoon section's settings, the paged ones the paged section's. */
+    private val continuous = viewer is WebGpuViewerContinuous
+
     init {
         readerPreferences.readerTheme.register(
             {
@@ -88,16 +97,20 @@ class WebGpuConfig(
 
         readerPreferences.zoomStart.register({ zoomTypeFromPreference(it) }, { imagePropertyChangedListener?.invoke() })
 
-        readerPreferences.cropBorders.register({ imageCropBorders = it }, { imagePropertyChangedListener?.invoke() })
+        (if (continuous) readerPreferences.cropBordersWebtoon else readerPreferences.cropBorders)
+            .register({ imageCropBorders = it }, { imagePropertyChangedListener?.invoke() })
 
         readerPreferences.navigateToPan.register({ navigateToPan = it })
 
         readerPreferences.landscapeZoom.register({ landscapeZoom = it }, { imagePropertyChangedListener?.invoke() })
 
-        readerPreferences.navigationModePager.register({ navigationMode = it }, { updateNavigation(navigationMode) })
+        val navigationModePref =
+            if (continuous) readerPreferences.navigationModeWebtoon else readerPreferences.navigationModePager
+        navigationModePref.register({ navigationMode = it }, { updateNavigation(navigationMode) })
 
-        readerPreferences.pagerNavInverted.register({ tappingInverted = it }, { navigator.invertMode = it })
-        readerPreferences.pagerNavInverted.changes().drop(1).onEach { navigationModeChangedListener?.invoke() }
+        val navInvertedPref = if (continuous) readerPreferences.webtoonNavInverted else readerPreferences.pagerNavInverted
+        navInvertedPref.register({ tappingInverted = it }, { navigator.invertMode = it })
+        navInvertedPref.changes().drop(1).onEach { navigationModeChangedListener?.invoke() }
             .launchIn(scope)
 
         readerPreferences.dualPageSplitPaged.register(
@@ -167,6 +180,17 @@ class WebGpuConfig(
             { bubbleZoom = it },
             { bubbleZoomChangedListener?.invoke(it) },
         )
+
+        (if (continuous) readerPreferences.webtoonDoubleTapZoomEnabled else readerPreferences.pagerDoubleTapZoomEnabled)
+            .register({ doubleTapZoom = it }, { doubleTapChangedListener?.invoke() })
+        readerPreferences.doubleTapAnimSpeed.changes().drop(1)
+            .onEach { doubleTapChangedListener?.invoke() }
+            .launchIn(scope)
+
+        // "Animate page transitions" off turns every transition into a cut - see WebGpuViewer.
+        readerPreferences.pageTransitions.changes().drop(1)
+            .onEach { imagePropertyChangedListener?.invoke() }
+            .launchIn(scope)
     }
 
     private fun zoomTypeFromPreference(value: Int) {

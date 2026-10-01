@@ -70,6 +70,12 @@ class ReaderPreferences(
         ReaderOrientation.FREE.flagValue,
     )
 
+    /** Double tap to zoom in the paged reader - the webtoon one has [webtoonDoubleTapZoomEnabled]. */
+    val pagerDoubleTapZoomEnabled: Preference<Boolean> = preferenceStore.getBoolean(
+        "pref_enable_double_tap_zoom_pager",
+        true,
+    )
+
     val webtoonDoubleTapZoomEnabled: Preference<Boolean> = preferenceStore.getBoolean(
         "pref_enable_double_tap_zoom_webtoon",
         true,

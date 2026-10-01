@@ -190,10 +190,7 @@ fun ImageViewerContinuous(
                                     val px =
                                         if (totalDiff != 0f) -startOffsetX / totalDiff else 0f
                                     animate(
-                                        0f, 1f, animationSpec = spring(
-                                            stiffness = Spring.StiffnessMediumLow,
-                                            visibilityThreshold = 0.002f
-                                        )
+                                        0f, 1f, animationSpec = state.doubleTapZoomSpec()
                                     ) { t, _ ->
                                         val newScale =
                                             startScale + (state.homeScale - startScale) * t
@@ -217,10 +214,7 @@ fun ImageViewerContinuous(
                                     val startScale = state.scale
                                     val startOffsetX = state.offsetX
                                     animate(
-                                        0f, 1f, animationSpec = spring(
-                                            stiffness = Spring.StiffnessMediumLow,
-                                            visibilityThreshold = 0.002f
-                                        )
+                                        0f, 1f, animationSpec = state.doubleTapZoomSpec()
                                     ) { t, _ ->
                                         val newScale =
                                             startScale + (state.doubleTapScale - startScale) * t
