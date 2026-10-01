@@ -251,6 +251,11 @@ object SettingsReaderScreen : SearchableSettings {
                     enabled = navMode != 5,
                 ),
                 Preference.PreferenceItem.SwitchPreference(
+                    preference = readerPreferences.bubbleZoom,
+                    title = stringResource(MR.strings.pref_bubble_zoom),
+                    subtitle = stringResource(MR.strings.pref_bubble_zoom_summary),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
                     preference = dualPageSplitPref,
                     title = stringResource(MR.strings.pref_dual_page_split),
                     onValueChanged = {

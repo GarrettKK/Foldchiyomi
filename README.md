@@ -43,6 +43,8 @@ The enlarged bubble is upscaled by ArtCNN, a small neural network for line art t
 
 It finds the bubble right on your phone, from the page itself: the white inside a dark outline, with lettering in it. That covers most black-and-white manga. Colour pages, text without a bubble, and bubbles with no outline aren't picked up, and there double-tap zooms in as usual.
 
+Don't want it? Turn it off in **Settings → Reader → Paged → Bubble zoom**, or from the reader's settings sheet.
+
 ## The icon
 
 折 (*ori*) means "to fold": the fold of the phone, and the fold of the page.

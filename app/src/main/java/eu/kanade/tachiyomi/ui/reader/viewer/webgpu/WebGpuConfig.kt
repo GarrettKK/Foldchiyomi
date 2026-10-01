@@ -70,6 +70,11 @@ class WebGpuConfig(
     var continuousGap = 10
         private set
 
+    var bubbleZoom = true
+        private set
+
+    var bubbleZoomChangedListener: ((Boolean) -> Unit)? = null
+
     init {
         readerPreferences.readerTheme.register(
             {
@@ -156,6 +161,11 @@ class WebGpuConfig(
         readerPreferences.continuousGap.register(
             { continuousGap = it },
             { imagePropertyChangedListener?.invoke() },
+        )
+
+        readerPreferences.bubbleZoom.register(
+            { bubbleZoom = it },
+            { bubbleZoomChangedListener?.invoke(it) },
         )
     }
 

@@ -6,6 +6,7 @@ All notable changes to Foldchiyomi are documented here. For the changes it inher
 
 ### Improved
 - Bubble zoom is sharper and cleaner. The bubble is enlarged with ArtCNN, a small neural network made for upscaling line art that runs on the phone's GPU, so lettering gets real edges instead of blur. The paper is cleaned to white and the ink to black, which clears up the grey haze and JPEG noise of low-quality scans. Colour is left alone.
+- Bubble zoom can be turned off: **Settings → Reader → Paged → Bubble zoom**, or in the reader's own settings sheet.
 
 ## [v1.1.0] - 2026-10-01
 
