@@ -471,6 +471,10 @@ fn front_color(src: vec2<f32>) -> vec4<f32> {
     return on_paper(sample_a(src));
 }
 
+/// What the back of a single page is printed on. Not [Uniforms.paper]: that follows the reader's
+/// background, and a black one turned the whole back of the sheet black.
+const SHEET_BACK = vec4<f32>(0.98, 0.98, 0.969, 1.0);
+
 /// The back face at sheet point [src]: in a book, the next spread's other half landing there;
 /// on a single page, its own print showing faintly through the paper.
 fn back_color(src: vec2<f32>) -> vec4<f32> {
@@ -479,7 +483,7 @@ fn back_color(src: vec2<f32>) -> vec4<f32> {
         return on_paper(sample_b(landed));
     }
     let through = on_paper(sample_a(src));
-    return mix(through, u.paper, 0.86);
+    return mix(through, SHEET_BACK, 0.86);
 }
 
 /// What lies under the sheet: page B where A has lifted off it; around the sheet, A giving way

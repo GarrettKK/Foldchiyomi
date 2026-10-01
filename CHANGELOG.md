@@ -7,6 +7,9 @@ All notable changes to Foldchiyomi are documented here. For the changes it inher
 ### Improved
 - Bubble zoom works on Western comics. Their lettering is denser and runs into the bubble's outline, bubbles get joined together, and some have spiky outlines; most of those were skipped. On a page of *Batman: Year One*, 25 of 26 bubbles and narration boxes now open, up from 11, while lettering laid straight over artwork still doesn't.
 
+### Fixed
+- Turning a single page with a black reader background showed the back of the sheet almost black. It's paper-white again, with the print showing faintly through.
+
 ## [v1.3.0] - 2026-10-01
 
 ### Added
