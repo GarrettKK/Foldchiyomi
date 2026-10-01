@@ -33,6 +33,10 @@ It is the default page transition. You can pick another one, or turn animations 
 
 ## Bubble zoom
 
+<p align="center">
+  <img src="./.github/assets/bubble-zoom.webp" alt="Double-tapping speech bubbles to open them enlarged over the page" width="360"/>
+</p>
+
 Double-tap a speech bubble and it lifts off the page, enlarged, the way Google Play Books does it. The rest of the page stays where it is, and a tap anywhere puts the bubble back.
 
 It finds the bubble right on your phone, from the page itself: the white inside a dark outline, with lettering in it. That covers most black-and-white manga. Colour pages, text without a bubble, and bubbles with no outline aren't picked up, and there double-tap zooms in as usual.
