@@ -17,7 +17,7 @@
   <img src="./.github/assets/demo.webp" alt="Turning manga pages on an unfolded foldable with Foldchiyomi's page curl" width="360"/>
 </p>
 
-Foldchiyomi is an unofficial fork of [Mihon](https://github.com/mihonapp/mihon), the manga reader, tuned for foldable phones and tablets. Unfold your phone and you get a two-page spread by default. Turn a page and it curls like a real one.
+Foldchiyomi is an unofficial fork of [Mihon](https://github.com/mihonapp/mihon), the manga reader, tuned for foldable phones and tablets. Unfold your phone and you get a two-page spread; fold it and the cover screen goes back to one page. Turn a page and it curls like a real one.
 
 Nothing else like it exists right now: page curls in other readers are canned animations, and none of them turn a two-page spread like a book. Here the page follows your finger.
 
@@ -44,6 +44,10 @@ The enlarged bubble is upscaled by ArtCNN, a small neural network for line art t
 It finds the bubble right on your phone, from the page itself: the white inside a dark outline, with lettering in it. That covers most black-and-white manga. Colour pages, text without a bubble, and bubbles with no outline aren't picked up, and there double-tap zooms in as usual.
 
 Don't want it? Turn it off in **Settings → Reader → Paged → Bubble zoom**, or from the reader's settings sheet.
+
+## Made for a mixed library
+
+Open a series for the first time and the reader asks how it reads, right to left for manga or left to right for comics, and remembers it for that series.
 
 ## The icon
 

@@ -81,6 +81,12 @@ private const val STREAM_WAIT_MS = 1000L
 /** Least time between feeds, so a trickle of small reads decodes and uploads in batches. */
 private const val STREAM_BATCH_MS = 33L
 
+/**
+ * Narrowest window, in dp, that "When unfolded" shows two pages on: where Android's own layouts
+ * go from phone to tablet. A foldable's inner screen is past it, its cover screen well short.
+ */
+private const val UNFOLDED_MIN_WIDTH_DP = 600
+
 open class WebGpuViewer(
     val activity: ReaderActivity,
     val isReversed: Boolean,
@@ -799,6 +805,10 @@ open class WebGpuViewer(
         return when (config.dualPageView) {
             ReaderPreferences.DualPageView.NEVER -> false
             ReaderPreferences.DualPageView.ALWAYS -> true
+            // The window's own width, known before the surface has a size. Folding or unfolding
+            // recreates the reader, so this is read afresh on the new screen.
+            ReaderPreferences.DualPageView.UNFOLDED ->
+                activity.resources.configuration.screenWidthDp >= UNFOLDED_MIN_WIDTH_DP
             ReaderPreferences.DualPageView.WIDE -> {
                 val width = pager.state.width
                 val height = pager.state.height

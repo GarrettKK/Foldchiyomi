@@ -541,6 +541,12 @@
     <string name="dual_page_view_never">Never</string>
     <string name="dual_page_view_always">Always</string>
     <string name="dual_page_view_wide">When wide</string>
+    <string name="dual_page_view_unfolded">When unfolded</string>
+    <string name="pref_ask_reading_mode">Ask for each new series</string>
+    <string name="pref_ask_reading_mode_summary">Pick the reading mode the first time you open a series</string>
+    <string name="first_reading_mode_title">How does this series read?</string>
+    <string name="first_reading_mode_summary">Saved for this series only. You can change it any time from the reader\'s menu.</string>
+    <string name="action_dont_ask_again">Don\'t ask again</string>
     <string name="pref_continuous_minwidth">Min width</string>
     <string name="pref_continuous_gap">Gap</string>
 
