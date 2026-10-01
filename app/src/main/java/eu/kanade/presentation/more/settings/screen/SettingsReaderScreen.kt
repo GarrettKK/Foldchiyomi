@@ -36,6 +36,11 @@ object SettingsReaderScreen : SearchableSettings {
                     .associate { it.flagValue to stringResource(it.stringRes) },
                 title = stringResource(MR.strings.pref_viewer_type),
             ),
+            Preference.PreferenceItem.SwitchPreference(
+                preference = readerPref.askReadingMode,
+                title = stringResource(MR.strings.pref_ask_reading_mode),
+                subtitle = stringResource(MR.strings.pref_ask_reading_mode_summary),
+            ),
             Preference.PreferenceItem.ListPreference(
                 preference = readerPref.doubleTapAnimSpeed,
                 entries = mapOf(

@@ -336,6 +336,13 @@ class ReaderViewModel(
                 loader = ChapterLoader(context, downloadManager, downloadProvider, chapterCache, manga, source)
 
                 loadChapter(loader!!, chapterList.first { chapterId == it.chapter.id })
+
+                // A series opened for the first time: ask how it reads, rather than leave it on
+                // the default until someone digs through the settings.
+                val readingMode = ReadingMode.fromPreference(manga.readingMode.toInt())
+                if (readingMode == ReadingMode.DEFAULT && readerPreferences.askReadingMode.get()) {
+                    mutableState.update { it.copy(dialog = Dialog.FirstReadingMode) }
+                }
             } catch (e: Throwable) {
                 if (e is CancellationException) {
                     throw e
@@ -807,6 +814,22 @@ class ReaderViewModel(
         mutableState.update { it.copy(dialog = Dialog.Loading) }
     }
 
+    /**
+     * The answer to [Dialog.FirstReadingMode], saved for this series - the default too, so it
+     * isn't asked again. Through [setMangaReadingMode] either way: any change to the manga
+     * rebuilds the viewer, which then needs its chapters handed over again.
+     */
+    fun saveFirstReadingMode(readingMode: ReadingMode) {
+        closeDialog()
+        setMangaReadingMode(readingMode)
+    }
+
+    /** "Don't ask again" on [Dialog.FirstReadingMode]: this series stays on the default. */
+    fun stopAskingReadingMode() {
+        readerPreferences.askReadingMode.set(false)
+        closeDialog()
+    }
+
     fun openReadingModeSelectDialog() {
         mutableState.update { it.copy(dialog = Dialog.ReadingModeSelect) }
     }
@@ -1010,6 +1033,7 @@ class ReaderViewModel(
         data object Loading : Dialog
         data object Settings : Dialog
         data object ReadingModeSelect : Dialog
+        data object FirstReadingMode : Dialog
         data object OrientationModeSelect : Dialog
         data class PageActions(val page: ReaderPage) : Dialog
     }

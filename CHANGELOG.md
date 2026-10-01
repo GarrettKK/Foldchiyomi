@@ -2,7 +2,13 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
-## [v1.2.0] - Unreleased
+## [v1.3.0] - Unreleased
+
+### Added
+- Dual page view has a new **When unfolded** mode, now the default: two pages on a foldable's inner screen, one page on its cover screen, switching by itself as you fold and unfold. Pick it under the reader's settings, **Dual page view**.
+- The first time you open a series, the reader asks how it reads: right to left for manga, left to right for comics, vertical or webtoon. The answer is saved for that series. Turn it off with **Don't ask again**, or under **Settings → Reader → Ask for each new series**.
+
+## [v1.2.0] - 2026-10-01
 
 ### Improved
 - Bubble zoom is sharper and cleaner. The bubble is enlarged with ArtCNN, a small neural network made for upscaling line art that runs on the phone's GPU, so lettering gets real edges instead of blur. The paper is cleaned to white and the ink to black, which clears up the grey haze and JPEG noise of low-quality scans. Colour is left alone.

@@ -62,6 +62,9 @@ class ReaderPreferences(
         ReadingMode.RIGHT_TO_LEFT.flagValue,
     )
 
+    /** Ask for a reading mode the first time a series without one of its own is opened. */
+    val askReadingMode: Preference<Boolean> = preferenceStore.getBoolean("ask_reading_mode", true)
+
     val defaultOrientationType: Preference<Int> = preferenceStore.getInt(
         "pref_default_orientation_type_key",
         ReaderOrientation.FREE.flagValue,
@@ -139,7 +142,7 @@ class ReaderPreferences(
 
     val dualPageView: Preference<DualPageView> = preferenceStore.getEnum(
         "pref_dual_page_view",
-        DualPageView.ALWAYS,
+        DualPageView.UNFOLDED,
     )
 
     // endregion
@@ -284,6 +287,9 @@ class ReaderPreferences(
     enum class DualPageView(val titleRes: StringResource) {
         NEVER(MR.strings.dual_page_view_never),
         ALWAYS(MR.strings.dual_page_view_always),
+
+        /** On a screen at least tablet-wide: a foldable unfolded, not on its cover screen. */
+        UNFOLDED(MR.strings.dual_page_view_unfolded),
         WIDE(MR.strings.dual_page_view_wide),
     }
 

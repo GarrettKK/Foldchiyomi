@@ -49,6 +49,7 @@ import eu.kanade.domain.base.BasePreferences
 import eu.kanade.presentation.reader.DisplayRefreshHost
 import eu.kanade.presentation.reader.OrientationSelectDialog
 import eu.kanade.presentation.reader.ReaderContentOverlay
+import eu.kanade.presentation.reader.FirstReadingModeDialog
 import eu.kanade.presentation.reader.ReaderPageActionsDialog
 import eu.kanade.presentation.reader.ReaderPageIndicator
 import eu.kanade.presentation.reader.ReadingModeSelectDialog
@@ -297,6 +298,14 @@ class ReaderActivity : BaseActivity() {
                     onShowMenus = { setMenuVisibility(true) },
                     onHideMenus = { setMenuVisibility(false) },
                     viewModel = settingsviewModel,
+                )
+            }
+            is ReaderViewModel.Dialog.FirstReadingMode -> {
+                FirstReadingModeDialog(
+                    onDismissRequest = onDismissRequest,
+                    initial = ReadingMode.fromPreference(viewModel.getMangaReadingMode()),
+                    onApply = viewModel::saveFirstReadingMode,
+                    onStopAsking = viewModel::stopAskingReadingMode,
                 )
             }
             is ReaderViewModel.Dialog.ReadingModeSelect -> {
