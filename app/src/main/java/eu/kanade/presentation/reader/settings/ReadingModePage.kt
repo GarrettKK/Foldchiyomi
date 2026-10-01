@@ -319,6 +319,13 @@ private fun ColumnScope.WebGpuViewerSettings(viewModel: ReaderSettingsViewModel)
         onSelectInvertMode = viewModel.preferences.pagerNavInverted::set,
     )
 
+    if (resolved != ReadingMode.WEBTOON && resolved != ReadingMode.CONTINUOUS_VERTICAL) {
+        CheckboxItem(
+            label = stringResource(MR.strings.pref_bubble_zoom),
+            pref = viewModel.preferences.bubbleZoom,
+        )
+    }
+
     if (isDual) {
         val transitionAnimation by viewModel.preferences.transitionAnimationDual.collectAsState()
         SettingsChipRow(MR.strings.pref_transition_animation_dual) {

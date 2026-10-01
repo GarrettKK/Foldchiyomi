@@ -1,6 +1,7 @@
 package ca.mpreg.webgpuviewer.renderer
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import androidx.webgpu.FilterMode
 import androidx.webgpu.GPUBindGroup
 import androidx.webgpu.GPUBindGroupDescriptor
@@ -124,22 +125,38 @@ class UpscalerArtCnn : Upscaler() {
 
     // ---- pipelines ----
 
+    @Volatile
     private var built: List<GPUComputePipeline>? = null
 
+    private fun descriptor(name: String, code: String) = GPUComputePipelineDescriptor(
+        label = "$LABEL $name", compute = GPUComputeState(
+            device.createShaderModule(
+                GPUShaderModuleDescriptor(label = name, shaderSourceWGSL = GPUShaderSourceWGSL(code))
+            ), entryPoint = "main"
+        )
+    )
+
     private fun pipelines(): List<GPUComputePipeline> =
-        built ?: PASSES.map { (name, code) ->
-            device.createComputePipeline(
-                GPUComputePipelineDescriptor(
-                    label = "$LABEL $name", compute = GPUComputeState(
-                        device.createShaderModule(
-                            GPUShaderModuleDescriptor(
-                                label = name, shaderSourceWGSL = GPUShaderSourceWGSL(code)
-                            )
-                        ), entryPoint = "main"
-                    )
-                )
-            )
-        }.also { built = it }
+        built ?: PASSES.map { (name, code) -> device.createComputePipeline(descriptor(name, code)) }
+            .also { built = it }
+
+    /**
+     * Compiles the network ahead of its first use, without holding the render thread: built
+     * synchronously, its nine pipelines take seconds on some phones, stalling every frame meanwhile.
+     */
+    suspend fun prewarm() {
+        if (built != null || failed) return
+        try {
+            val pipelines = PASSES.map { (name, code) ->
+                device.createComputePipelineAndAwait(descriptor(name, code))
+            }
+            if (built == null) built = pipelines
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            fail(e)
+        }
+    }
 
     private val sampler: GPUSampler by lazy {
         device.createSampler(

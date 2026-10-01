@@ -1,5 +1,6 @@
 package ca.mpreg.webgpuviewer.viewer
 
+import android.util.Log
 import androidx.webgpu.BlendFactor
 import androidx.webgpu.BlendOperation
 import androidx.webgpu.BufferUsage
@@ -12,11 +13,13 @@ import androidx.webgpu.GPUBufferDescriptor
 import androidx.webgpu.GPUColor
 import androidx.webgpu.GPUColorTargetState
 import androidx.webgpu.GPUCommandEncoder
+import androidx.webgpu.GPUDevice
 import androidx.webgpu.GPUExtent3D
 import androidx.webgpu.GPUFragmentState
 import androidx.webgpu.GPUPrimitiveState
 import androidx.webgpu.GPURenderPassColorAttachment
 import androidx.webgpu.GPURenderPassDescriptor
+import androidx.webgpu.GPURenderPassEncoder
 import androidx.webgpu.GPURenderPipelineDescriptor
 import androidx.webgpu.GPUSamplerDescriptor
 import androidx.webgpu.GPUShaderModuleDescriptor
@@ -35,17 +38,25 @@ import androidx.webgpu.TextureUsage
 import ca.mpreg.webgpuviewer.draw.Draw
 import ca.mpreg.webgpuviewer.draw.rect
 import ca.mpreg.webgpuviewer.renderer.FormatKeyed
+import ca.mpreg.webgpuviewer.renderer.Hdr
 import ca.mpreg.webgpuviewer.renderer.Image
 import ca.mpreg.webgpuviewer.renderer.InkMap
+import ca.mpreg.webgpuviewer.renderer.UpscalerArtCnn
 import ca.mpreg.webgpuviewer.renderer.WebGpuRenderer
 import ca.mpreg.webgpuviewer.renderer.destroyAndRelease
 import ca.mpreg.webgpuviewer.renderer.endAndRelease
 import ca.mpreg.webgpuviewer.renderer.groupLayout
 import ca.mpreg.webgpuviewer.renderer.setTransientBindGroup
+import ca.mpreg.webgpuviewer.renderer.submitAndRelease
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * A speech bubble lifted off the page and shown enlarged over it, the way Google Play Books does -
@@ -64,6 +75,8 @@ internal class BubbleOverlay(
     val targetX: Float,
     val targetY: Float,
     val zoom: Float,
+    /** Screen pixels per image pixel at rest - how much detail the scan has to give. */
+    val screenPerImagePixel: Float,
 ) {
     val centerX: Float get() = (rect[0] + rect[2]) * 0.5f
     val centerY: Float get() = (rect[1] + rect[3]) * 0.5f
@@ -104,6 +117,15 @@ internal class BubbleOverlay(
         return texture.createView().also { maskView = it }
     }
 
+    /**
+     * The bubble's part of the page, enlarged once and kept while it is open - see
+     * [BubbleZoom.enlarge]. [sourceScale] is its pixels per screen pixel at rest, from the
+     * bubble's top-left corner.
+     */
+    var source: GPUTexture? = null
+    var sourceView: GPUTextureView? = null
+    var sourceScale: Float = 1f
+
     /** On the render thread. */
     fun release() {
         released = true
@@ -111,6 +133,10 @@ internal class BubbleOverlay(
         maskTexture?.destroyAndRelease()
         maskView = null
         maskTexture = null
+        sourceView?.close()
+        source?.destroyAndRelease()
+        sourceView = null
+        source = null
     }
 }
 
@@ -133,6 +159,9 @@ internal object BubbleZoom {
 
     /** Largest single mark inside a bubble, as a share of it - a letter or a line of them. */
     private const val MAX_MARK = 0.2f
+
+    /** How round a bubble is at least: 1 for a circle, about 0.65 with a long tail. */
+    private const val MIN_COMPACTNESS = 0.4f
 
     /** Map pixels added around the bubble, so its own outline comes with it. */
     private const val OUTLINE = 2
@@ -204,6 +233,7 @@ internal object BubbleZoom {
             if (halfSize + margin >= 0.5f) 0.5f else center.coerceIn(halfSize + margin, 1f - halfSize - margin)
 
         return BubbleOverlay(
+            screenPerImagePixel = (imageRect[2] - imageRect[0]) * screenWidth / image.width,
             page = page,
             mask = found.mask,
             maskWidth = found.width,
@@ -332,6 +362,18 @@ internal object BubbleZoom {
         if (ink < MIN_INK || ink > MAX_INK) return null
         if (largestMark(shape, outside, outW, outH) > MAX_MARK * filledArea) return null
 
+        // Compact, as a bubble or a caption box is - not the ragged white halo of lettering laid
+        // over artwork, which floods into a shape all edge. Counted edges overshoot a smooth
+        // outline's length by about 4/pi, hence the correction; a circle comes out near 1.
+        var edges = 0
+        for (sy in 0 until outH) for (sx in 0 until outW) {
+            val i = sy * outW + sx
+            if (sx > 0 && outside[i] != outside[i - 1]) edges++
+            if (sy > 0 && outside[i] != outside[i - outW]) edges++
+        }
+        val compactness = 64f * filledArea / (Math.PI.toFloat() * edges * edges)
+        if (compactness < MIN_COMPACTNESS) return null
+
         // Grow by the outline, square brush.
         val mask = ByteArray(outW * outH)
         for (sy in 0 until outH) for (sx in 0 until outW) {
@@ -342,7 +384,33 @@ internal object BubbleZoom {
                 if (tx in 0 until outW && ty in 0 until outH) mask[ty * outW + tx] = 0xFF.toByte()
             }
         }
-        return Found(ox, oy, outW, outH, mask)
+        return Found(ox, oy, outW, outH, soften(mask, outW, outH))
+    }
+
+    /**
+     * Blurs the shape's hard map-pixel steps into a smooth field, so the edge drawn at its
+     * midpoint is a curve rather than a staircase once the bubble is enlarged. Two box passes
+     * each way, radius 2 - near enough a Gaussian.
+     */
+    private fun soften(mask: ByteArray, w: Int, h: Int): ByteArray {
+        var src = FloatArray(mask.size) { (mask[it].toInt() and 0xFF) / 255f }
+        val radius = 2
+        repeat(2) {
+            val horizontal = FloatArray(src.size)
+            for (y in 0 until h) for (x in 0 until w) {
+                var sum = 0f
+                for (d in -radius..radius) sum += src[y * w + (x + d).coerceIn(0, w - 1)]
+                horizontal[y * w + x] = sum / (2 * radius + 1)
+            }
+            val vertical = FloatArray(src.size)
+            for (y in 0 until h) for (x in 0 until w) {
+                var sum = 0f
+                for (d in -radius..radius) sum += horizontal[(y + d).coerceIn(0, h - 1) * w + x]
+                vertical[y * w + x] = sum / (2 * radius + 1)
+            }
+            src = vertical
+        }
+        return ByteArray(src.size) { (src[it] * 255f + 0.5f).toInt().coerceIn(0, 255).toByte() }
     }
 
     /** Size of the largest connected mark inside the bubble: filled in, but not its paper. */
@@ -380,6 +448,27 @@ internal object BubbleZoom {
 
     private const val UNIFORM_SIZE = 64
 
+    /** How long after the reader opens to warm up - past its first page's decode. */
+    private const val WARM_UP_DELAY_MS = 1500L
+
+    /** How long to give ArtCNN's background compile before finishing it in the warm-up. */
+    private const val ASYNC_COMPILE_TIMEOUT_MS = 4000L
+
+    /** Largest side of what ArtCNN is given, halo included - keeps its feature maps small. */
+    private const val MAX_INPUT = 512
+
+    /**
+     * ArtCNN's input side is rounded up to this, so bubbles of about the same size reuse its
+     * working textures instead of allocating new ones - see [enlarge].
+     */
+    private const val INPUT_STEP = 64
+
+    /** How long a bubble waits for its enlargement to finish on the GPU before it opens anyway. */
+    private const val GPU_WAIT_TIMEOUT_MS = 1500L
+
+    /** Largest side of the enlarged bubble when ArtCNN can't run and it is drawn directly. */
+    private const val MAX_DIRECT = 2048
+
     private val sampler by lazy {
         WebGpuRenderer.device.createSampler(
             GPUSamplerDescriptor(magFilter = FilterMode.Linear, minFilter = FilterMode.Linear)
@@ -388,33 +477,94 @@ internal object BubbleZoom {
 
     private val byteBuffer = ByteBuffer.allocateDirect(UNIFORM_SIZE).order(ByteOrder.nativeOrder())
 
-    private var zoomTexture: GPUTexture? = null
-    private var zoomView: GPUTextureView? = null
+    /**
+     * Its own instance, not the tile renderer's: that one runs on the tile worker. Kept for the
+     * session, so its compiled network outlives any one bubble - see [prewarm].
+     */
+    private val artCnn by lazy { UpscalerArtCnn() }
 
-    /** A surface-sized texture to draw the enlarged page into, kept while the size holds. */
-    private fun zoomTarget(dst: GPUTexture): GPUTexture {
-        zoomTexture?.let {
-            if (it.width == dst.width && it.height == dst.height && it.format == dst.format) return it
+    /** Whether [warmUp] has run its tiny pass of ArtCNN's whole path. */
+    private var warmed = false
+
+    /**
+     * Runs [block] while handing Dawn's events their callbacks: an `...AndAwait` call resolves
+     * only when something processes events, and between frames nothing else does - unpumped,
+     * ArtCNN's background compile never finished and the warm-up compiled it all over again,
+     * holding the render thread for a second or two.
+     */
+    private suspend fun <R> pumped(block: suspend () -> R): R = coroutineScope {
+        val pump = launch {
+            while (isActive) {
+                WebGpuRenderer.instance.processEvents()
+                delay(1)
+            }
         }
-        releaseTarget()
-        return WebGpuRenderer.device.createTexture(
-            GPUTextureDescriptor(
-                size = GPUExtent3D(dst.width, dst.height),
-                format = dst.format,
-                usage = TextureUsage.RenderAttachment or TextureUsage.TextureBinding,
-            )
-        ).also {
-            zoomTexture = it
-            zoomView = it.createView()
+        try {
+            block()
+        } finally {
+            pump.cancel()
         }
     }
 
-    /** Frees the enlarged-page texture - on the render thread, once no bubble is open. */
-    fun releaseTarget() {
-        zoomView?.close()
-        zoomTexture?.destroyAndRelease()
-        zoomView = null
-        zoomTexture = null
+    /**
+     * Readies everything the first bubble needs, shortly after the reader opens: ArtCNN's network
+     * compiled in the background where the device allows it, then one tiny run of the whole path
+     * - its textures, its resolve pipeline, the first dispatch a driver compiles lazily, and this
+     * overlay's own pipeline. Whatever of that still blocks then lands while a page is being
+     * read, not after a tap.
+     */
+    suspend fun prewarm() {
+        delay(WARM_UP_DELAY_MS)
+        withTimeoutOrNull(ASYNC_COMPILE_TIMEOUT_MS) { pumped { artCnn.prewarm() } }
+        runCatching { WebGpuRenderer.withContext { device -> warmUp(device) } }
+            .onFailure { Log.w("BubbleZoom", "Warm-up failed", it) }
+    }
+
+    private fun warmUp(device: GPUDevice) {
+        val format = Hdr.frameFormat
+        pipelines[format]
+        val art = artCnn
+        if (!art.supported || warmed) return
+        val side = 64
+        val input = art.input(side, format) ?: return
+        val inputView = art.inputView ?: return
+        val encoder = device.createCommandEncoder()
+        clearedPass(encoder, inputView) {}
+        art.encode(encoder, side)
+        val out = texture((side - 2 * art.halo) * art.factor, format)
+        val outView = out.createView()
+        clearedPass(encoder, outView) { pass -> art.resolve(pass, format) }
+        device.queue.submitAndRelease(encoder)
+        // Freed once the GPU is done with it - only the compiling and first dispatches mattered.
+        outView.close()
+        out.destroyAndRelease()
+        warmed = true
+    }
+
+    /**
+     * Enlarges [bubble] before its first frame, on the render thread between frames, so the
+     * opening animation runs smoothly from its first step instead of stalling a few frames in.
+     */
+    fun prepare(bubble: BubbleOverlay, screenWidth: Int, screenHeight: Int) {
+        if (bubble.released || bubble.sourceView != null) return
+        val device = WebGpuRenderer.device
+        val format = Hdr.frameFormat
+        val encoder = device.createCommandEncoder()
+        enlarge(encoder, screenWidth, screenHeight, format, bubble)
+        device.queue.submitAndRelease(encoder)
+        bubble.maskView()
+        pipelines[format]
+    }
+
+    /**
+     * Waits, off the render lock, for the GPU to finish the enlargement [prepare] submitted. The
+     * network takes a few hundred milliseconds on some phones: opened straight away, the
+     * animation's frames queued behind it and it froze for that long just short of full size.
+     */
+    suspend fun awaitPrepared() {
+        withTimeoutOrNull(GPU_WAIT_TIMEOUT_MS) {
+            WebGpuRenderer.onDispatcher { device -> pumped { device.queue.onSubmittedWorkDone() } }
+        }
     }
 
     private val pipelines = FormatKeyed { format ->
@@ -443,31 +593,24 @@ internal object BubbleZoom {
         )
     }
 
-    /**
-     * Draws [bubble] over [dst], which already holds its page at rest: the page dimmed, then the
-     * bubble growing from where it sits to where it opens, with a shadow under it.
-     */
-    fun draw(encoder: GPUCommandEncoder, dst: GPUTexture, bubble: BubbleOverlay, progress: Float) {
-        if (bubble.released || progress <= 0f) return
-        val page = bubble.page
-        if (page.destroyed || page.scale <= 0f) return
+    private fun texture(side: Int, format: Int): GPUTexture =
+        WebGpuRenderer.device.createTexture(
+            GPUTextureDescriptor(
+                size = GPUExtent3D(side, side),
+                format = format,
+                usage = TextureUsage.RenderAttachment or TextureUsage.TextureBinding,
+            )
+        )
 
-        val t = progress.coerceAtLeast(0f)
-        val zoom = 1f + (bubble.zoom - 1f) * t
-        val cx = bubble.centerX + (bubble.targetX - bubble.centerX) * t
-        val cy = bubble.centerY + (bubble.targetY - bubble.centerY) * t
-
-        Draw.rect(encoder, dst, 0f, 0f, 1f, 1f, ((0.45f * t.coerceAtMost(1f) * 255).toInt() shl 24))
-
-        // The page again, [zoom] times larger about the bubble, landing its centre on (cx, cy):
-        // renderPage places at page.x + x scaled by page.scale * scale, so solve for x and y.
-        val target = zoomTarget(dst)
-        val targetView = target.createView()
-        val zoomPass = encoder.beginRenderPass(
+    /** A cleared pass over [view], for [block] to draw into. */
+    private fun clearedPass(
+        encoder: GPUCommandEncoder, view: GPUTextureView, block: (GPURenderPassEncoder) -> Unit
+    ) {
+        val pass = encoder.beginRenderPass(
             GPURenderPassDescriptor(
                 colorAttachments = arrayOf(
                     GPURenderPassColorAttachment(
-                        view = targetView,
+                        view = view,
                         loadOp = LoadOp.Clear,
                         storeOp = StoreOp.Store,
                         clearValue = GPUColor(0.0, 0.0, 0.0, 0.0),
@@ -476,12 +619,113 @@ internal object BubbleZoom {
             )
         )
         try {
-            val dx = (cx - 0.5f + zoom * (0.5f - bubble.centerX)) / (zoom * page.scale)
-            val dy = (cy - 0.5f + zoom * (0.5f - bubble.centerY)) / (zoom * page.scale)
-            page.renderPage(zoomPass, target, dx, dy, zoom, linear = true, masked = false)
+            block(pass)
         } finally {
-            zoomPass.endAndRelease(targetView)
+            pass.endAndRelease()
         }
+    }
+
+    /**
+     * Draws [page] into [dst] ([side] square) at [scale] times its size at rest, with the
+     * bubble's top-left corner at pixel ([inset], [inset]). renderPage places the page at
+     * `page.x + x` in units of the target's own size, so the offset is solved for that size.
+     */
+    private fun drawCrop(
+        pass: GPURenderPassEncoder,
+        dst: GPUTexture,
+        side: Int,
+        page: ImagePage.ImageSingle,
+        bubble: BubbleOverlay,
+        screenWidth: Int,
+        screenHeight: Int,
+        scale: Float,
+        inset: Int,
+    ) {
+        val s0 = page.scale
+        fun offset(restPx: Float, screen: Int, pagePos: Float, globalOffset: Float): Float =
+            (inset - scale * restPx - 0.5f * side + 0.5f * scale * screen +
+                    s0 * scale * (pagePos + globalOffset) * (screen - side)) / (s0 * scale * side)
+        val dx = offset(bubble.rect[0] * screenWidth, screenWidth, page.x, WebGpuRenderer.offsetX)
+        val dy = offset(bubble.rect[1] * screenHeight, screenHeight, page.y, WebGpuRenderer.offsetY)
+        page.renderPage(pass, dst, dx, dy, scale, linear = true, masked = false)
+    }
+
+    /**
+     * The bubble's part of the page, enlarged once for as long as it is open: drawn at the scan's
+     * own resolution where the zoom asks for more than that, then doubled by ArtCNN - the network
+     * the reader already uses to sharpen zoomed line art - so lettering gains real edges rather
+     * than blur. Where ArtCNN can't run, the page is simply drawn at the full zoom.
+     */
+    private fun enlarge(
+        encoder: GPUCommandEncoder, w: Int, h: Int, format: Int, bubble: BubbleOverlay
+    ): GPUTextureView? {
+        bubble.sourceView?.let { return it }
+        val page = bubble.page
+        val bubbleSide = max((bubble.rect[2] - bubble.rect[0]) * w, (bubble.rect[3] - bubble.rect[1]) * h)
+        if (bubbleSide < 1f) return null
+
+        val art = artCnn
+        if (art.supported) {
+            val halo = art.halo
+            // Native resolution where the zoom reaches past it, and never less than half the zoom
+            // - ArtCNN doubles - but small enough to keep its working textures modest.
+            val native = 1f / bubble.screenPerImagePixel
+            var scale = native.coerceIn(bubble.zoom / art.factor, bubble.zoom)
+            scale = min(scale, (MAX_INPUT - 2 * halo) / bubbleSide)
+            // Rounded up, and so its working textures - kept from one bubble to the next - are
+            // reallocated only when a bubble needs a different size of them.
+            val side = min(
+                MAX_INPUT,
+                ((bubbleSide * scale + 2 * halo).toInt() + INPUT_STEP - 1) / INPUT_STEP * INPUT_STEP,
+            )
+            val input = art.input(side, format)
+            val inputView = art.inputView
+            if (input != null && inputView != null) {
+                clearedPass(encoder, inputView) { pass ->
+                    drawCrop(pass, input, side, page, bubble, w, h, scale, halo)
+                }
+                art.encode(encoder, side)
+                if (art.supported) {
+                    val outSide = (side - 2 * halo) * art.factor
+                    val out = texture(outSide, format)
+                    val outView = out.createView()
+                    clearedPass(encoder, outView) { pass -> art.resolve(pass, format) }
+                    bubble.source = out
+                    bubble.sourceView = outView
+                    bubble.sourceScale = scale * art.factor
+                    return outView
+                }
+            }
+        }
+
+        val scale = min(bubble.zoom, MAX_DIRECT / bubbleSide)
+        val side = (bubbleSide * scale).toInt().coerceAtLeast(1)
+        val out = texture(side, format)
+        val outView = out.createView()
+        clearedPass(encoder, outView) { pass -> drawCrop(pass, out, side, page, bubble, w, h, scale, 0) }
+        bubble.source = out
+        bubble.sourceView = outView
+        bubble.sourceScale = scale
+        return outView
+    }
+
+    /**
+     * Draws [bubble] over [dst], which already holds its page at rest: the page dimmed, then the
+     * bubble growing from where it sits to where it opens, cleaned up, with a shadow under it.
+     */
+    fun draw(encoder: GPUCommandEncoder, dst: GPUTexture, bubble: BubbleOverlay, progress: Float) {
+        if (bubble.released || progress <= 0f) return
+        val page = bubble.page
+        if (page.destroyed || page.scale <= 0f) return
+        val source = enlarge(encoder, dst.width, dst.height, dst.format, bubble) ?: return
+        val sourceSide = bubble.source?.width ?: return
+
+        val t = progress.coerceAtLeast(0f)
+        val zoom = 1f + (bubble.zoom - 1f) * t
+        val cx = bubble.centerX + (bubble.targetX - bubble.centerX) * t
+        val cy = bubble.centerY + (bubble.targetY - bubble.centerY) * t
+
+        Draw.rect(encoder, dst, 0f, 0f, 1f, 1f, ((0.45f * t.coerceAtMost(1f) * 255).toInt() shl 24))
 
         byteBuffer.clear()
         byteBuffer.putFloat(bubble.rect[0])
@@ -495,10 +739,10 @@ internal object BubbleZoom {
         byteBuffer.putFloat(zoom)
         byteBuffer.putFloat(t.coerceAtMost(1f))
         byteBuffer.putFloat(dst.width.toFloat() / dst.height)
-        byteBuffer.putFloat(0f)
-        byteBuffer.putFloat(0f)
-        byteBuffer.putFloat(0f)
-        byteBuffer.putFloat(0f)
+        byteBuffer.putFloat(bubble.sourceScale)
+        byteBuffer.putFloat(dst.width.toFloat())
+        byteBuffer.putFloat(dst.height.toFloat())
+        byteBuffer.putFloat(sourceSide.toFloat())
         byteBuffer.putFloat(0f)
         byteBuffer.flip()
         val device = WebGpuRenderer.device
@@ -530,7 +774,7 @@ internal object BubbleZoom {
                     GPUBindGroupDescriptor(
                         layout = pipeline.groupLayout(), entries = arrayOf(
                             GPUBindGroupEntry(0, buffer = uniforms),
-                            GPUBindGroupEntry(1, textureView = zoomView!!),
+                            GPUBindGroupEntry(1, textureView = source),
                             GPUBindGroupEntry(2, textureView = bubble.maskView()),
                             GPUBindGroupEntry(3, sampler = sampler),
                         )
@@ -550,13 +794,14 @@ struct Uniforms {
     rect: vec4<f32>,
     // Its centre at rest, and where that centre is now.
     center: vec4<f32>,
-    // Zoom now, how open (0-1), surface width over height, unused.
+    // Zoom now, how open (0-1), surface width over height, source pixels per screen pixel.
     params: vec4<f32>,
-    unused: vec4<f32>,
+    // Surface width and height in pixels, the source's side, unused.
+    size: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
-@group(0) @binding(1) var zoomed: texture_2d<f32>;
+@group(0) @binding(1) var source: texture_2d<f32>;
 @group(0) @binding(2) var shape: texture_2d<f32>;
 @group(0) @binding(3) var samp: sampler;
 
@@ -582,13 +827,42 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     return out;
 }
 
-/// How much of the bubble covers screen point [uv] - traced back through the zoom to the page at
-/// rest, where the shape was found. Sharpened, since the shape is far coarser than the screen.
+/// Screen point [uv] traced back through the zoom to the page at rest, where the bubble was found.
+fn at_rest(uv: vec2<f32>) -> vec2<f32> {
+    return u.center.xy + (uv - u.center.zw) / u.params.x;
+}
+
+/// How much of the bubble covers screen point [uv]. Sharpened, since the shape is far coarser
+/// than the screen.
 fn coverage(uv: vec2<f32>) -> f32 {
-    let rest = u.center.xy + (uv - u.center.zw) / u.params.x;
-    let m = (rest - u.rect.xy) / (u.rect.zw - u.rect.xy);
+    let m = (at_rest(uv) - u.rect.xy) / (u.rect.zw - u.rect.xy);
     if (m.x < 0.0 || m.y < 0.0 || m.x > 1.0 || m.y > 1.0) { return 0.0; }
-    return smoothstep(0.3, 0.7, textureSampleLevel(shape, samp, m, 0.0).r);
+    return smoothstep(0.4, 0.6, textureSampleLevel(shape, samp, m, 0.0).r);
+}
+
+fn luma(c: vec3<f32>) -> f32 { return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722)); }
+
+/// The enlarged page at screen point [uv], cleaned up the way lettering wants: a light unsharp
+/// mask for crisp strokes, then paper nudged toward white and ink toward black - partly, so
+/// lettering keeps its anti-aliasing, and only where the page is grey, so colour is left alone.
+fn page_at(uv: vec2<f32>) -> vec4<f32> {
+    let px = (at_rest(uv) - u.rect.xy) * u.size.xy * u.params.w;
+    let st = px / u.size.z;
+    let d = 1.0 / u.size.z;
+    let c = textureSampleLevel(source, samp, st, 0.0);
+    let around = (textureSampleLevel(source, samp, st + vec2<f32>(d, 0.0), 0.0) +
+        textureSampleLevel(source, samp, st - vec2<f32>(d, 0.0), 0.0) +
+        textureSampleLevel(source, samp, st + vec2<f32>(0.0, d), 0.0) +
+        textureSampleLevel(source, samp, st - vec2<f32>(0.0, d), 0.0)) * 0.25;
+    if (c.a <= 0.0) { return c; }
+    // Premultiplied in, straight for the grading.
+    var rgb = clamp((c.rgb + 0.15 * (c.rgb - around.rgb)) / c.a, vec3<f32>(0.0), vec3<f32>(1.0));
+    let y = luma(rgb);
+    let chroma = max(max(rgb.r, rgb.g), rgb.b) - min(min(rgb.r, rgb.g), rgb.b);
+    let grey = 1.0 - smoothstep(0.06, 0.18, chroma);
+    let graded = vec3<f32>(smoothstep(0.06, 0.94, y));
+    rgb = mix(rgb, graded, 0.6 * grey);
+    return vec4<f32>(rgb * c.a, c.a);
 }
 
 @fragment
@@ -607,8 +881,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     shadow += coverage(in.uv - drop - vec2<f32>(0.0, spread.y));
     let shadow_alpha = 0.5 * open * shadow / 5.0;
 
-    let page = textureSampleLevel(zoomed, samp, in.uv, 0.0);
-    let front = page * cover;
+    var front = vec4<f32>(0.0);
+    if (cover > 0.0) { front = page_at(in.uv) * cover; }
     let alpha = front.a + (1.0 - front.a) * shadow_alpha;
     if (alpha <= 0.001) { discard; }
     return vec4<f32>(front.rgb, alpha);

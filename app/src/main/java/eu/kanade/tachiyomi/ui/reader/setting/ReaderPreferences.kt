@@ -209,6 +209,9 @@ class ReaderPreferences(
 
     val cutoutMode: Preference<CutoutMode> = preferenceStore.getEnum("webgpu_cutout_mode", CutoutMode.AVOID)
 
+    /** Double-tap a speech bubble to open it enlarged over the page. */
+    val bubbleZoom: Preference<Boolean> = preferenceStore.getBoolean("webgpu_bubble_zoom", true)
+
     val cutoutModeDual: Preference<CutoutMode> = preferenceStore.getEnum("webgpu_dual_cutout_mode", CutoutMode.IGNORE)
 
     val continuousMinWidth: Preference<Int> = preferenceStore.getInt("webgpu_continuous_minwidth", 100)

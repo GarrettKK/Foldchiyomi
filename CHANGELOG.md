@@ -2,6 +2,12 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
+## [v1.2.0] - Unreleased
+
+### Improved
+- Bubble zoom is sharper and cleaner. The bubble is enlarged with ArtCNN, a small neural network made for upscaling line art that runs on the phone's GPU, so lettering gets real edges instead of blur. The paper is cleaned to white and the ink to black, which clears up the grey haze and JPEG noise of low-quality scans. Colour is left alone.
+- Bubble zoom can be turned off: **Settings → Reader → Paged → Bubble zoom**, or in the reader's own settings sheet.
+
 ## [v1.1.0] - 2026-10-01
 
 ### Added
@@ -22,5 +28,6 @@ First release. Based on Mihon 0.20.4 with its unreleased changes as of late Sept
 ### Removed
 - Firebase analytics and crash reporting: never included in any build.
 
+[v1.2.0]: https://github.com/GarrettKK/Foldchiyomi/releases/tag/v1.2.0
 [v1.1.0]: https://github.com/GarrettKK/Foldchiyomi/releases/tag/v1.1.0
 [v1.0.0]: https://github.com/GarrettKK/Foldchiyomi/releases/tag/v1.0.0

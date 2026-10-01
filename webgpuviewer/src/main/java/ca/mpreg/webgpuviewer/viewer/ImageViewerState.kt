@@ -38,6 +38,7 @@ import ca.mpreg.webgpuviewer.renderer.endAndRelease
 import ca.mpreg.webgpuviewer.transition.Transition
 import ca.mpreg.webgpuviewer.transition.TransitionBasic
 import ca.mpreg.webgpuviewer.transition.TurnGesture
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -240,8 +241,17 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         } ?: return false
         // The page may have turned while it looked.
         if (getPage(0) !== page || pageOffset != 0f || bubble != null) return false
+        // Shown at progress 0 - nothing drawn - while it is enlarged, then animated: enlarging
+        // inside the animation would stall its first frames and make it jump.
         bubble = found
-        animateBubble(found, 1f)
+        runCatching {
+            WebGpuRenderer.withContext { BubbleZoom.prepare(found, w, h) }
+            BubbleZoom.awaitPrepared()
+        }.onFailure {
+            if (it is CancellationException) throw it
+            Log.w("ImageViewerState", "Bubble preparation failed", it)
+        }
+        if (bubble === found) animateBubble(found, 1f)
         return true
     }
 
@@ -283,12 +293,12 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         }
     }
 
-    /** Its GPU resources go on the render thread, after any frame already drawing with them. */
+    /**
+     * Its GPU resources go on the render thread, after any frame already drawing with them.
+     * ArtCNN's working textures stay, for the next bubble.
+     */
     private fun releaseBubble(overlay: BubbleOverlay) {
-        post {
-            overlay.release()
-            BubbleZoom.releaseTarget()
-        }
+        post { overlay.release() }
     }
 
     // One instance for this state's lifetime, so [cleanup] can tell its own from a successor's.
@@ -315,6 +325,8 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
     fun init(scope: CoroutineScope, surface: Surface, width: Int, height: Int) {
         this.renderer.init(scope, surface, width, height)
         this.scope = scope
+        // The paged viewer only - the continuous one has no bubble zoom.
+        if (bubbleZoomEnabled && this !is ImageViewerContinuousState) post { BubbleZoom.prewarm() }
         Hdr.requestFrame = invalidateCallback
 
         // On [dispatcher] and drained under the lock, as [post] itself would have run them.

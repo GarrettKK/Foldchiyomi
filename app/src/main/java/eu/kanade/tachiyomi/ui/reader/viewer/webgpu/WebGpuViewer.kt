@@ -965,6 +965,9 @@ open class WebGpuViewer(
             }
         }
 
+        pager.state.bubbleZoomEnabled = config.bubbleZoom
+        config.bubbleZoomChangedListener = { pager.state.bubbleZoomEnabled = it }
+
         config.imagePropertyChangedListener = {
             // A theme change comes through here.
             cachedBackgroundColor = null

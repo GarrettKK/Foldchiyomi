@@ -39,7 +39,11 @@ It is the default page transition. You can pick another one, or turn animations 
 
 Double-tap a speech bubble and it lifts off the page, enlarged, the way Google Play Books does it. The rest of the page stays where it is, and a tap anywhere puts the bubble back.
 
+The enlarged bubble is upscaled by ArtCNN, a small neural network for line art that runs on the phone's GPU, and cleaned up: paper to white, ink to black. Lettering stays crisp even on low-quality scans.
+
 It finds the bubble right on your phone, from the page itself: the white inside a dark outline, with lettering in it. That covers most black-and-white manga. Colour pages, text without a bubble, and bubbles with no outline aren't picked up, and there double-tap zooms in as usual.
+
+Don't want it? Turn it off in **Settings → Reader → Paged → Bubble zoom**, or from the reader's settings sheet.
 
 ## The icon
 
