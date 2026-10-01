@@ -52,7 +52,10 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -454,6 +457,15 @@ internal object BubbleZoom {
     /** Largest side of what ArtCNN is given, halo included - keeps its feature maps small. */
     private const val MAX_INPUT = 512
 
+    /**
+     * ArtCNN's input side is rounded up to this, so bubbles of about the same size reuse its
+     * working textures instead of allocating new ones - see [enlarge].
+     */
+    private const val INPUT_STEP = 64
+
+    /** How long a bubble waits for its enlargement to finish on the GPU before it opens anyway. */
+    private const val GPU_WAIT_TIMEOUT_MS = 1500L
+
     /** Largest side of the enlarged bubble when ArtCNN can't run and it is drawn directly. */
     private const val MAX_DIRECT = 2048
 
@@ -471,9 +483,28 @@ internal object BubbleZoom {
      */
     private val artCnn by lazy { UpscalerArtCnn() }
 
-    /** A tiny run of ArtCNN's whole path, kept until [releaseTarget] - see [prewarm]. */
-    private var warmTexture: GPUTexture? = null
-    private var warmView: GPUTextureView? = null
+    /** Whether [warmUp] has run its tiny pass of ArtCNN's whole path. */
+    private var warmed = false
+
+    /**
+     * Runs [block] while handing Dawn's events their callbacks: an `...AndAwait` call resolves
+     * only when something processes events, and between frames nothing else does - unpumped,
+     * ArtCNN's background compile never finished and the warm-up compiled it all over again,
+     * holding the render thread for a second or two.
+     */
+    private suspend fun <R> pumped(block: suspend () -> R): R = coroutineScope {
+        val pump = launch {
+            while (isActive) {
+                WebGpuRenderer.instance.processEvents()
+                delay(1)
+            }
+        }
+        try {
+            block()
+        } finally {
+            pump.cancel()
+        }
+    }
 
     /**
      * Readies everything the first bubble needs, shortly after the reader opens: ArtCNN's network
@@ -484,7 +515,7 @@ internal object BubbleZoom {
      */
     suspend fun prewarm() {
         delay(WARM_UP_DELAY_MS)
-        withTimeoutOrNull(ASYNC_COMPILE_TIMEOUT_MS) { artCnn.prewarm() }
+        withTimeoutOrNull(ASYNC_COMPILE_TIMEOUT_MS) { pumped { artCnn.prewarm() } }
         runCatching { WebGpuRenderer.withContext { device -> warmUp(device) } }
             .onFailure { Log.w("BubbleZoom", "Warm-up failed", it) }
     }
@@ -493,7 +524,7 @@ internal object BubbleZoom {
         val format = Hdr.frameFormat
         pipelines[format]
         val art = artCnn
-        if (!art.supported || warmTexture != null) return
+        if (!art.supported || warmed) return
         val side = 64
         val input = art.input(side, format) ?: return
         val inputView = art.inputView ?: return
@@ -504,8 +535,10 @@ internal object BubbleZoom {
         val outView = out.createView()
         clearedPass(encoder, outView) { pass -> art.resolve(pass, format) }
         device.queue.submitAndRelease(encoder)
-        warmTexture = out
-        warmView = outView
+        // Freed once the GPU is done with it - only the compiling and first dispatches mattered.
+        outView.close()
+        out.destroyAndRelease()
+        warmed = true
     }
 
     /**
@@ -523,13 +556,15 @@ internal object BubbleZoom {
         pipelines[format]
     }
 
-    /** Frees ArtCNN's working textures - on the render thread, once no bubble is open. */
-    fun releaseTarget() {
-        artCnn.cleanup()
-        warmView?.close()
-        warmTexture?.destroyAndRelease()
-        warmView = null
-        warmTexture = null
+    /**
+     * Waits, off the render lock, for the GPU to finish the enlargement [prepare] submitted. The
+     * network takes a few hundred milliseconds on some phones: opened straight away, the
+     * animation's frames queued behind it and it froze for that long just short of full size.
+     */
+    suspend fun awaitPrepared() {
+        withTimeoutOrNull(GPU_WAIT_TIMEOUT_MS) {
+            WebGpuRenderer.onDispatcher { device -> pumped { device.queue.onSubmittedWorkDone() } }
+        }
     }
 
     private val pipelines = FormatKeyed { format ->
@@ -637,7 +672,12 @@ internal object BubbleZoom {
             val native = 1f / bubble.screenPerImagePixel
             var scale = native.coerceIn(bubble.zoom / art.factor, bubble.zoom)
             scale = min(scale, (MAX_INPUT - 2 * halo) / bubbleSide)
-            val side = ((bubbleSide * scale + 2 * halo).toInt() + 7) / 8 * 8
+            // Rounded up, and so its working textures - kept from one bubble to the next - are
+            // reallocated only when a bubble needs a different size of them.
+            val side = min(
+                MAX_INPUT,
+                ((bubbleSide * scale + 2 * halo).toInt() + INPUT_STEP - 1) / INPUT_STEP * INPUT_STEP,
+            )
             val input = art.input(side, format)
             val inputView = art.inputView
             if (input != null && inputView != null) {

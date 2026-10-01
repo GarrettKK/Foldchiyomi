@@ -38,6 +38,7 @@ import ca.mpreg.webgpuviewer.renderer.endAndRelease
 import ca.mpreg.webgpuviewer.transition.Transition
 import ca.mpreg.webgpuviewer.transition.TransitionBasic
 import ca.mpreg.webgpuviewer.transition.TurnGesture
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -243,8 +244,13 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         // Shown at progress 0 - nothing drawn - while it is enlarged, then animated: enlarging
         // inside the animation would stall its first frames and make it jump.
         bubble = found
-        runCatching { WebGpuRenderer.withContext { BubbleZoom.prepare(found, w, h) } }
-            .onFailure { Log.w("ImageViewerState", "Bubble preparation failed", it) }
+        runCatching {
+            WebGpuRenderer.withContext { BubbleZoom.prepare(found, w, h) }
+            BubbleZoom.awaitPrepared()
+        }.onFailure {
+            if (it is CancellationException) throw it
+            Log.w("ImageViewerState", "Bubble preparation failed", it)
+        }
         if (bubble === found) animateBubble(found, 1f)
         return true
     }
@@ -287,12 +293,12 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         }
     }
 
-    /** Its GPU resources go on the render thread, after any frame already drawing with them. */
+    /**
+     * Its GPU resources go on the render thread, after any frame already drawing with them.
+     * ArtCNN's working textures stay, for the next bubble.
+     */
     private fun releaseBubble(overlay: BubbleOverlay) {
-        post {
-            overlay.release()
-            BubbleZoom.releaseTarget()
-        }
+        post { overlay.release() }
     }
 
     // One instance for this state's lifetime, so [cleanup] can tell its own from a successor's.
