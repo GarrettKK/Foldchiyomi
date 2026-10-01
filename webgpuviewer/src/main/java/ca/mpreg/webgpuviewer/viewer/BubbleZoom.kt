@@ -1,5 +1,6 @@
 package ca.mpreg.webgpuviewer.viewer
 
+import android.util.Log
 import androidx.webgpu.BlendFactor
 import androidx.webgpu.BlendOperation
 import androidx.webgpu.BufferUsage
@@ -12,6 +13,7 @@ import androidx.webgpu.GPUBufferDescriptor
 import androidx.webgpu.GPUColor
 import androidx.webgpu.GPUColorTargetState
 import androidx.webgpu.GPUCommandEncoder
+import androidx.webgpu.GPUDevice
 import androidx.webgpu.GPUExtent3D
 import androidx.webgpu.GPUFragmentState
 import androidx.webgpu.GPUPrimitiveState
@@ -36,6 +38,7 @@ import androidx.webgpu.TextureUsage
 import ca.mpreg.webgpuviewer.draw.Draw
 import ca.mpreg.webgpuviewer.draw.rect
 import ca.mpreg.webgpuviewer.renderer.FormatKeyed
+import ca.mpreg.webgpuviewer.renderer.Hdr
 import ca.mpreg.webgpuviewer.renderer.Image
 import ca.mpreg.webgpuviewer.renderer.InkMap
 import ca.mpreg.webgpuviewer.renderer.UpscalerArtCnn
@@ -44,10 +47,13 @@ import ca.mpreg.webgpuviewer.renderer.destroyAndRelease
 import ca.mpreg.webgpuviewer.renderer.endAndRelease
 import ca.mpreg.webgpuviewer.renderer.groupLayout
 import ca.mpreg.webgpuviewer.renderer.setTransientBindGroup
+import ca.mpreg.webgpuviewer.renderer.submitAndRelease
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * A speech bubble lifted off the page and shown enlarged over it, the way Google Play Books does -
@@ -439,6 +445,12 @@ internal object BubbleZoom {
 
     private const val UNIFORM_SIZE = 64
 
+    /** How long after the reader opens to warm up - past its first page's decode. */
+    private const val WARM_UP_DELAY_MS = 1500L
+
+    /** How long to give ArtCNN's background compile before finishing it in the warm-up. */
+    private const val ASYNC_COMPILE_TIMEOUT_MS = 4000L
+
     /** Largest side of what ArtCNN is given, halo included - keeps its feature maps small. */
     private const val MAX_INPUT = 512
 
@@ -459,12 +471,65 @@ internal object BubbleZoom {
      */
     private val artCnn by lazy { UpscalerArtCnn() }
 
-    /** Compiles ArtCNN in the background, so the first bubble doesn't wait seconds for it. */
-    suspend fun prewarm() = artCnn.prewarm()
+    /** A tiny run of ArtCNN's whole path, kept until [releaseTarget] - see [prewarm]. */
+    private var warmTexture: GPUTexture? = null
+    private var warmView: GPUTextureView? = null
+
+    /**
+     * Readies everything the first bubble needs, shortly after the reader opens: ArtCNN's network
+     * compiled in the background where the device allows it, then one tiny run of the whole path
+     * - its textures, its resolve pipeline, the first dispatch a driver compiles lazily, and this
+     * overlay's own pipeline. Whatever of that still blocks then lands while a page is being
+     * read, not after a tap.
+     */
+    suspend fun prewarm() {
+        delay(WARM_UP_DELAY_MS)
+        withTimeoutOrNull(ASYNC_COMPILE_TIMEOUT_MS) { artCnn.prewarm() }
+        runCatching { WebGpuRenderer.withContext { device -> warmUp(device) } }
+            .onFailure { Log.w("BubbleZoom", "Warm-up failed", it) }
+    }
+
+    private fun warmUp(device: GPUDevice) {
+        val format = Hdr.frameFormat
+        pipelines[format]
+        val art = artCnn
+        if (!art.supported || warmTexture != null) return
+        val side = 64
+        val input = art.input(side, format) ?: return
+        val inputView = art.inputView ?: return
+        val encoder = device.createCommandEncoder()
+        clearedPass(encoder, inputView) {}
+        art.encode(encoder, side)
+        val out = texture((side - 2 * art.halo) * art.factor, format)
+        val outView = out.createView()
+        clearedPass(encoder, outView) { pass -> art.resolve(pass, format) }
+        device.queue.submitAndRelease(encoder)
+        warmTexture = out
+        warmView = outView
+    }
+
+    /**
+     * Enlarges [bubble] before its first frame, on the render thread between frames, so the
+     * opening animation runs smoothly from its first step instead of stalling a few frames in.
+     */
+    fun prepare(bubble: BubbleOverlay, screenWidth: Int, screenHeight: Int) {
+        if (bubble.released || bubble.sourceView != null) return
+        val device = WebGpuRenderer.device
+        val format = Hdr.frameFormat
+        val encoder = device.createCommandEncoder()
+        enlarge(encoder, screenWidth, screenHeight, format, bubble)
+        device.queue.submitAndRelease(encoder)
+        bubble.maskView()
+        pipelines[format]
+    }
 
     /** Frees ArtCNN's working textures - on the render thread, once no bubble is open. */
     fun releaseTarget() {
         artCnn.cleanup()
+        warmView?.close()
+        warmTexture?.destroyAndRelease()
+        warmView = null
+        warmTexture = null
     }
 
     private val pipelines = FormatKeyed { format ->
@@ -557,12 +622,10 @@ internal object BubbleZoom {
      * than blur. Where ArtCNN can't run, the page is simply drawn at the full zoom.
      */
     private fun enlarge(
-        encoder: GPUCommandEncoder, dst: GPUTexture, bubble: BubbleOverlay
+        encoder: GPUCommandEncoder, w: Int, h: Int, format: Int, bubble: BubbleOverlay
     ): GPUTextureView? {
         bubble.sourceView?.let { return it }
         val page = bubble.page
-        val w = dst.width
-        val h = dst.height
         val bubbleSide = max((bubble.rect[2] - bubble.rect[0]) * w, (bubble.rect[3] - bubble.rect[1]) * h)
         if (bubbleSide < 1f) return null
 
@@ -575,7 +638,7 @@ internal object BubbleZoom {
             var scale = native.coerceIn(bubble.zoom / art.factor, bubble.zoom)
             scale = min(scale, (MAX_INPUT - 2 * halo) / bubbleSide)
             val side = ((bubbleSide * scale + 2 * halo).toInt() + 7) / 8 * 8
-            val input = art.input(side, dst.format)
+            val input = art.input(side, format)
             val inputView = art.inputView
             if (input != null && inputView != null) {
                 clearedPass(encoder, inputView) { pass ->
@@ -584,9 +647,9 @@ internal object BubbleZoom {
                 art.encode(encoder, side)
                 if (art.supported) {
                     val outSide = (side - 2 * halo) * art.factor
-                    val out = texture(outSide, dst.format)
+                    val out = texture(outSide, format)
                     val outView = out.createView()
-                    clearedPass(encoder, outView) { pass -> art.resolve(pass, dst.format) }
+                    clearedPass(encoder, outView) { pass -> art.resolve(pass, format) }
                     bubble.source = out
                     bubble.sourceView = outView
                     bubble.sourceScale = scale * art.factor
@@ -597,7 +660,7 @@ internal object BubbleZoom {
 
         val scale = min(bubble.zoom, MAX_DIRECT / bubbleSide)
         val side = (bubbleSide * scale).toInt().coerceAtLeast(1)
-        val out = texture(side, dst.format)
+        val out = texture(side, format)
         val outView = out.createView()
         clearedPass(encoder, outView) { pass -> drawCrop(pass, out, side, page, bubble, w, h, scale, 0) }
         bubble.source = out
@@ -614,7 +677,7 @@ internal object BubbleZoom {
         if (bubble.released || progress <= 0f) return
         val page = bubble.page
         if (page.destroyed || page.scale <= 0f) return
-        val source = enlarge(encoder, dst, bubble) ?: return
+        val source = enlarge(encoder, dst.width, dst.height, dst.format, bubble) ?: return
         val sourceSide = bubble.source?.width ?: return
 
         val t = progress.coerceAtLeast(0f)

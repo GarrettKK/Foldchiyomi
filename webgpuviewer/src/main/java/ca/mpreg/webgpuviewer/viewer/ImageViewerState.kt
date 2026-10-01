@@ -240,8 +240,12 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         } ?: return false
         // The page may have turned while it looked.
         if (getPage(0) !== page || pageOffset != 0f || bubble != null) return false
+        // Shown at progress 0 - nothing drawn - while it is enlarged, then animated: enlarging
+        // inside the animation would stall its first frames and make it jump.
         bubble = found
-        animateBubble(found, 1f)
+        runCatching { WebGpuRenderer.withContext { BubbleZoom.prepare(found, w, h) } }
+            .onFailure { Log.w("ImageViewerState", "Bubble preparation failed", it) }
+        if (bubble === found) animateBubble(found, 1f)
         return true
     }
 
