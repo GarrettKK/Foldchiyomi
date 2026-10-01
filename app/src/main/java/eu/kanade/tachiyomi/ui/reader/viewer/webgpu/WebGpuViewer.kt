@@ -805,10 +805,18 @@ open class WebGpuViewer(
         return when (config.dualPageView) {
             ReaderPreferences.DualPageView.NEVER -> false
             ReaderPreferences.DualPageView.ALWAYS -> true
-            // The window's own width, known before the surface has a size. Folding or unfolding
-            // recreates the reader, so this is read afresh on the new screen.
-            ReaderPreferences.DualPageView.UNFOLDED ->
-                activity.resources.configuration.screenWidthDp >= UNFOLDED_MIN_WIDTH_DP
+            // The surface's own width, read live like WIDE: folding doesn't always recreate the
+            // reader, and a resize redraws with whatever this says. The window's width stands in
+            // until the surface has a size.
+            ReaderPreferences.DualPageView.UNFOLDED -> {
+                val width = pager.state.width
+                val widthDp = if (width > 0) {
+                    width / activity.resources.displayMetrics.density
+                } else {
+                    activity.resources.configuration.screenWidthDp.toFloat()
+                }
+                widthDp >= UNFOLDED_MIN_WIDTH_DP
+            }
             ReaderPreferences.DualPageView.WIDE -> {
                 val width = pager.state.width
                 val height = pager.state.height

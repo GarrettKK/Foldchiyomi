@@ -815,21 +815,13 @@ class ReaderViewModel(
     }
 
     /**
-     * The answer to [Dialog.FirstReadingMode], saved for this series. The default itself is
-     * saved too, so it isn't asked again - without reloading a viewer already showing it.
+     * The answer to [Dialog.FirstReadingMode], saved for this series - the default too, so it
+     * isn't asked again. Through [setMangaReadingMode] either way: any change to the manga
+     * rebuilds the viewer, which then needs its chapters handed over again.
      */
     fun saveFirstReadingMode(readingMode: ReadingMode) {
         closeDialog()
-        if (readingMode.flagValue != readerPreferences.defaultReadingMode.get()) {
-            setMangaReadingMode(readingMode)
-            return
-        }
-        val manga = manga ?: return
-        viewModelScope.launchIO {
-            setMangaViewerFlags.awaitSetReadingMode(manga.id, readingMode.flagValue.toLong())
-            val updated = getManga.await(manga.id) ?: return@launchIO
-            mutableState.update { it.copy(manga = updated) }
-        }
+        setMangaReadingMode(readingMode)
     }
 
     /** "Don't ask again" on [Dialog.FirstReadingMode]: this series stays on the default. */
