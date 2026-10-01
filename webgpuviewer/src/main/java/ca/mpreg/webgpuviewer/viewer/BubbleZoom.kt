@@ -151,6 +151,9 @@ internal object BubbleZoom {
     /** Largest single mark inside a bubble, as a share of it - a letter or a line of them. */
     private const val MAX_MARK = 0.2f
 
+    /** How round a bubble is at least: 1 for a circle, about 0.65 with a long tail. */
+    private const val MIN_COMPACTNESS = 0.4f
+
     /** Map pixels added around the bubble, so its own outline comes with it. */
     private const val OUTLINE = 2
 
@@ -350,6 +353,18 @@ internal object BubbleZoom {
         if (ink < MIN_INK || ink > MAX_INK) return null
         if (largestMark(shape, outside, outW, outH) > MAX_MARK * filledArea) return null
 
+        // Compact, as a bubble or a caption box is - not the ragged white halo of lettering laid
+        // over artwork, which floods into a shape all edge. Counted edges overshoot a smooth
+        // outline's length by about 4/pi, hence the correction; a circle comes out near 1.
+        var edges = 0
+        for (sy in 0 until outH) for (sx in 0 until outW) {
+            val i = sy * outW + sx
+            if (sx > 0 && outside[i] != outside[i - 1]) edges++
+            if (sy > 0 && outside[i] != outside[i - outW]) edges++
+        }
+        val compactness = 64f * filledArea / (Math.PI.toFloat() * edges * edges)
+        if (compactness < MIN_COMPACTNESS) return null
+
         // Grow by the outline, square brush.
         val mask = ByteArray(outW * outH)
         for (sy in 0 until outH) for (sx in 0 until outW) {
@@ -360,7 +375,33 @@ internal object BubbleZoom {
                 if (tx in 0 until outW && ty in 0 until outH) mask[ty * outW + tx] = 0xFF.toByte()
             }
         }
-        return Found(ox, oy, outW, outH, mask)
+        return Found(ox, oy, outW, outH, soften(mask, outW, outH))
+    }
+
+    /**
+     * Blurs the shape's hard map-pixel steps into a smooth field, so the edge drawn at its
+     * midpoint is a curve rather than a staircase once the bubble is enlarged. Two box passes
+     * each way, radius 2 - near enough a Gaussian.
+     */
+    private fun soften(mask: ByteArray, w: Int, h: Int): ByteArray {
+        var src = FloatArray(mask.size) { (mask[it].toInt() and 0xFF) / 255f }
+        val radius = 2
+        repeat(2) {
+            val horizontal = FloatArray(src.size)
+            for (y in 0 until h) for (x in 0 until w) {
+                var sum = 0f
+                for (d in -radius..radius) sum += src[y * w + (x + d).coerceIn(0, w - 1)]
+                horizontal[y * w + x] = sum / (2 * radius + 1)
+            }
+            val vertical = FloatArray(src.size)
+            for (y in 0 until h) for (x in 0 until w) {
+                var sum = 0f
+                for (d in -radius..radius) sum += horizontal[(y + d).coerceIn(0, h - 1) * w + x]
+                vertical[y * w + x] = sum / (2 * radius + 1)
+            }
+            src = vertical
+        }
+        return ByteArray(src.size) { (src[it] * 255f + 0.5f).toInt().coerceIn(0, 255).toByte() }
     }
 
     /** Size of the largest connected mark inside the bubble: filled in, but not its paper. */
@@ -412,13 +453,18 @@ internal object BubbleZoom {
 
     private val byteBuffer = ByteBuffer.allocateDirect(UNIFORM_SIZE).order(ByteOrder.nativeOrder())
 
-    /** Its own instance, not the tile renderer's: that one runs on the tile worker. */
-    private var artCnn: UpscalerArtCnn? = null
+    /**
+     * Its own instance, not the tile renderer's: that one runs on the tile worker. Kept for the
+     * session, so its compiled network outlives any one bubble - see [prewarm].
+     */
+    private val artCnn by lazy { UpscalerArtCnn() }
 
-    /** Frees ArtCNN's textures - on the render thread, once no bubble is open. */
+    /** Compiles ArtCNN in the background, so the first bubble doesn't wait seconds for it. */
+    suspend fun prewarm() = artCnn.prewarm()
+
+    /** Frees ArtCNN's working textures - on the render thread, once no bubble is open. */
     fun releaseTarget() {
-        artCnn?.cleanup()
-        artCnn = null
+        artCnn.cleanup()
     }
 
     private val pipelines = FormatKeyed { format ->
@@ -520,7 +566,7 @@ internal object BubbleZoom {
         val bubbleSide = max((bubble.rect[2] - bubble.rect[0]) * w, (bubble.rect[3] - bubble.rect[1]) * h)
         if (bubbleSide < 1f) return null
 
-        val art = artCnn ?: UpscalerArtCnn().also { artCnn = it }
+        val art = artCnn
         if (art.supported) {
             val halo = art.halo
             // Native resolution where the zoom reaches past it, and never less than half the zoom
@@ -688,14 +734,14 @@ fn at_rest(uv: vec2<f32>) -> vec2<f32> {
 fn coverage(uv: vec2<f32>) -> f32 {
     let m = (at_rest(uv) - u.rect.xy) / (u.rect.zw - u.rect.xy);
     if (m.x < 0.0 || m.y < 0.0 || m.x > 1.0 || m.y > 1.0) { return 0.0; }
-    return smoothstep(0.3, 0.7, textureSampleLevel(shape, samp, m, 0.0).r);
+    return smoothstep(0.4, 0.6, textureSampleLevel(shape, samp, m, 0.0).r);
 }
 
 fn luma(c: vec3<f32>) -> f32 { return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722)); }
 
 /// The enlarged page at screen point [uv], cleaned up the way lettering wants: a light unsharp
-/// mask for crisp strokes, then paper pushed to white and ink to black - but only where the
-/// page is grey, so colour is left alone.
+/// mask for crisp strokes, then paper nudged toward white and ink toward black - partly, so
+/// lettering keeps its anti-aliasing, and only where the page is grey, so colour is left alone.
 fn page_at(uv: vec2<f32>) -> vec4<f32> {
     let px = (at_rest(uv) - u.rect.xy) * u.size.xy * u.params.w;
     let st = px / u.size.z;
@@ -707,12 +753,12 @@ fn page_at(uv: vec2<f32>) -> vec4<f32> {
         textureSampleLevel(source, samp, st - vec2<f32>(0.0, d), 0.0)) * 0.25;
     if (c.a <= 0.0) { return c; }
     // Premultiplied in, straight for the grading.
-    var rgb = clamp((c.rgb + 0.35 * (c.rgb - around.rgb)) / c.a, vec3<f32>(0.0), vec3<f32>(1.0));
+    var rgb = clamp((c.rgb + 0.15 * (c.rgb - around.rgb)) / c.a, vec3<f32>(0.0), vec3<f32>(1.0));
     let y = luma(rgb);
     let chroma = max(max(rgb.r, rgb.g), rgb.b) - min(min(rgb.r, rgb.g), rgb.b);
     let grey = 1.0 - smoothstep(0.06, 0.18, chroma);
-    let graded = vec3<f32>(smoothstep(0.12, 0.88, y));
-    rgb = mix(rgb, graded, grey);
+    let graded = vec3<f32>(smoothstep(0.06, 0.94, y));
+    rgb = mix(rgb, graded, 0.6 * grey);
     return vec4<f32>(rgb * c.a, c.a);
 }
 

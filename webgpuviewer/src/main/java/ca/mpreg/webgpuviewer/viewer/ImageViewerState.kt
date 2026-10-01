@@ -315,6 +315,8 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
     fun init(scope: CoroutineScope, surface: Surface, width: Int, height: Int) {
         this.renderer.init(scope, surface, width, height)
         this.scope = scope
+        // The paged viewer only - the continuous one has no bubble zoom.
+        if (bubbleZoomEnabled && this !is ImageViewerContinuousState) post { BubbleZoom.prewarm() }
         Hdr.requestFrame = invalidateCallback
 
         // On [dispatcher] and drained under the lock, as [post] itself would have run them.
