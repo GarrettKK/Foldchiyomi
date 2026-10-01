@@ -155,16 +155,33 @@ internal object BubbleZoom {
 
     /** Share of a bubble's area its lettering takes, at least and at most. */
     private const val MIN_INK = 0.015f
-    private const val MAX_INK = 0.3f
+    private const val MAX_INK = 0.45f
 
     /** Largest single mark inside a bubble, as a share of it - a letter or a line of them. */
     private const val MAX_MARK = 0.2f
 
-    /** How round a bubble is at least: 1 for a circle, about 0.65 with a long tail. */
-    private const val MIN_COMPACTNESS = 0.4f
+    /**
+     * How round a bubble is at least, measured once [CLOSE] has smoothed it: 1 for a circle,
+     * about 0.65 with a long tail, under 0.4 for a spiky radio bubble or two joined by a neck.
+     * Lettering laid over artwork, flooded through its white halo, stays near 0.2.
+     */
+    private const val MIN_COMPACTNESS = 0.33f
+
+    /** Share of its bounds a bubble fills at least - two joined by a neck fill about a third. */
+    private const val MIN_FILL = 0.3f
+
+    /**
+     * Map pixels the shape is closed over before it is measured or cut out: comic lettering
+     * often runs into the outline, and each letter that touches it would otherwise bite a notch
+     * out of the bubble - out of its outline length, and out of what is enlarged.
+     */
+    private const val CLOSE = 3
 
     /** Map pixels added around the bubble, so its own outline comes with it. */
     private const val OUTLINE = 2
+
+    /** Room around the bubble's bounds for [CLOSE] and [OUTLINE] to grow into. */
+    private const val PAD = 4
 
     /** How far the bubble grows at most, and at least for it to be worth opening. */
     private const val MAX_ZOOM = 3.2f
@@ -314,77 +331,108 @@ internal object BubbleZoom {
         if (bw < 0.03f * w || bh < 0.02f * h || paperArea < 200) return null
 
         // Fill the lettering in: everything in the bounds the outside can't reach is bubble.
-        val outW = bw + 2 * (OUTLINE + 1)
-        val outH = bh + 2 * (OUTLINE + 1)
-        val ox = x0 - (OUTLINE + 1)
-        val oy = y0 - (OUTLINE + 1)
+        val outW = bw + 2 * PAD
+        val outH = bh + 2 * PAD
+        val ox = x0 - PAD
+        val oy = y0 - PAD
         val shape = BooleanArray(outW * outH)
         for (sy in 0 until outH) for (sx in 0 until outW) {
             val mx = ox + sx
             val my = oy + sy
             if (mx in 0 until w && my in 0 until h && inside[my * w + mx]) shape[sy * outW + sx] = true
         }
-        val outside = BooleanArray(outW * outH)
-        val q2 = IntArray(outW * outH)
-        head = 0
-        tail = 0
-        fun reach(i: Int) {
-            if (!shape[i] && !outside[i]) {
-                outside[i] = true
-                q2[tail++] = i
-            }
-        }
-        for (sx in 0 until outW) {
-            reach(sx)
-            reach((outH - 1) * outW + sx)
-        }
-        for (sy in 0 until outH) {
-            reach(sy * outW)
-            reach(sy * outW + outW - 1)
-        }
-        while (head < tail) {
-            val i = q2[head++]
-            val sx = i % outW
-            val sy = i / outW
-            if (sx > 0) reach(i - 1)
-            if (sx < outW - 1) reach(i + 1)
-            if (sy > 0) reach(i - outW)
-            if (sy < outH - 1) reach(i + outW)
-        }
+        val outside = outsideOf(shape, outW, outH)
         var filledArea = 0
         for (i in shape.indices) if (!outside[i]) filledArea++
 
         // Round enough to be a bubble, small enough not to be a panel, and with something
-        // written in it - but only lettering, which is sparse and in small pieces. A panel's
-        // artwork is dense, or has a large piece.
-        if (filledArea < 0.4f * bw * bh || filledArea > maxArea) return null
+        // written in it - but only lettering, which is in small pieces. A panel's artwork is
+        // dense, or has a large piece.
+        if (filledArea < MIN_FILL * bw * bh || filledArea > maxArea) return null
         val ink = (filledArea - paperArea).toFloat() / filledArea
         if (ink < MIN_INK || ink > MAX_INK) return null
         if (largestMark(shape, outside, outW, outH) > MAX_MARK * filledArea) return null
 
+        // Closed over the notches lettering bites out of it, then filled again.
+        val solid = BooleanArray(outW * outH) { !outside[it] }
+        val closed = grow(grow(solid, outW, outH, CLOSE, dilate = true), outW, outH, CLOSE, dilate = false)
+        val closedOutside = outsideOf(closed, outW, outH)
+
         // Compact, as a bubble or a caption box is - not the ragged white halo of lettering laid
         // over artwork, which floods into a shape all edge. Counted edges overshoot a smooth
         // outline's length by about 4/pi, hence the correction; a circle comes out near 1.
+        var closedArea = 0
         var edges = 0
         for (sy in 0 until outH) for (sx in 0 until outW) {
             val i = sy * outW + sx
-            if (sx > 0 && outside[i] != outside[i - 1]) edges++
-            if (sy > 0 && outside[i] != outside[i - outW]) edges++
+            if (!closedOutside[i]) closedArea++
+            if (sx > 0 && closedOutside[i] != closedOutside[i - 1]) edges++
+            if (sy > 0 && closedOutside[i] != closedOutside[i - outW]) edges++
         }
-        val compactness = 64f * filledArea / (Math.PI.toFloat() * edges * edges)
+        val compactness = 64f * closedArea / (Math.PI.toFloat() * edges * edges)
         if (compactness < MIN_COMPACTNESS) return null
 
-        // Grow by the outline, square brush.
-        val mask = ByteArray(outW * outH)
-        for (sy in 0 until outH) for (sx in 0 until outW) {
-            if (outside[sy * outW + sx]) continue
-            for (dy in -OUTLINE..OUTLINE) for (dx in -OUTLINE..OUTLINE) {
-                val tx = sx + dx
-                val ty = sy + dy
-                if (tx in 0 until outW && ty in 0 until outH) mask[ty * outW + tx] = 0xFF.toByte()
+        // Grown by the outline.
+        val grown = grow(BooleanArray(outW * outH) { !closedOutside[it] }, outW, outH, OUTLINE, dilate = true)
+        val mask = ByteArray(outW * outH) { if (grown[it]) 0xFF.toByte() else 0 }
+        return Found(ox, oy, outW, outH, soften(mask, outW, outH))
+    }
+
+    /** What of a [w] x [h] frame can be reached from its border without crossing [shape]. */
+    private fun outsideOf(shape: BooleanArray, w: Int, h: Int): BooleanArray {
+        val outside = BooleanArray(w * h)
+        val queue = IntArray(w * h)
+        var head = 0
+        var tail = 0
+        fun reach(i: Int) {
+            if (!shape[i] && !outside[i]) {
+                outside[i] = true
+                queue[tail++] = i
             }
         }
-        return Found(ox, oy, outW, outH, soften(mask, outW, outH))
+        for (x in 0 until w) {
+            reach(x)
+            reach((h - 1) * w + x)
+        }
+        for (y in 0 until h) {
+            reach(y * w)
+            reach(y * w + w - 1)
+        }
+        while (head < tail) {
+            val i = queue[head++]
+            val x = i % w
+            val y = i / w
+            if (x > 0) reach(i - 1)
+            if (x < w - 1) reach(i + 1)
+            if (y > 0) reach(i - w)
+            if (y < h - 1) reach(i + w)
+        }
+        return outside
+    }
+
+    /**
+     * [shape] dilated or eroded by a square of radius [r], one axis at a time. Past the frame
+     * counts as empty, which [PAD] keeps clear of the shape.
+     */
+    private fun grow(shape: BooleanArray, w: Int, h: Int, r: Int, dilate: Boolean): BooleanArray {
+        fun pass(src: BooleanArray, horizontal: Boolean): BooleanArray = BooleanArray(w * h) { i ->
+            val x = i % w
+            val y = i / w
+            var any = false
+            var all = true
+            for (d in -r..r) {
+                val v = if (horizontal) {
+                    val tx = x + d
+                    tx in 0 until w && src[y * w + tx]
+                } else {
+                    val ty = y + d
+                    ty in 0 until h && src[ty * w + x]
+                }
+                if (v) any = true else all = false
+            }
+            if (dilate) any else all
+        }
+        return pass(pass(shape, horizontal = true), horizontal = false)
     }
 
     /**

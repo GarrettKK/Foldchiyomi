@@ -2,7 +2,12 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
-## [v1.3.0] - Unreleased
+## [v1.3.1] - Unreleased
+
+### Improved
+- Bubble zoom works on Western comics. Their lettering is denser and runs into the bubble's outline, bubbles get joined together, and some have spiky outlines; most of those were skipped. On a page of *Batman: Year One*, 25 of 26 bubbles and narration boxes now open, up from 11, while lettering laid straight over artwork still doesn't.
+
+## [v1.3.0] - 2026-10-01
 
 ### Added
 - Dual page view has a new **When unfolded** mode, now the default: two pages on a foldable's inner screen, one page on its cover screen, switching by itself as you fold and unfold. Pick it under the reader's settings, **Dual page view**.
