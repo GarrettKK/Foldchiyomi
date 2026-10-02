@@ -2,7 +2,15 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
-## [v1.3.2] - Unreleased
+## [v1.4.0] - Unreleased
+
+### Added
+- An empty library now shows how to read comics already on your phone, in three steps with a picture of the folder layout, and buttons to open Local source and the storage folder setting.
+
+### Changed
+- Reading modes have names that say what they're for: **Right to left (Manga)**, **Left to right (Comics)** and **Long strip (Webtoon)**.
+
+## [v1.3.2] - 2026-10-01
 
 ### Fixed
 - Reader settings that did nothing now work, or are hidden where they can't. Some were left over from Mihon's older readers and never reached Foldchiyomi's.
