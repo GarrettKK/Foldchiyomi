@@ -2,7 +2,15 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
-## [v1.5.0] - Unreleased
+## [v1.6.0] - Unreleased
+
+### Added
+- **Zoom to panel.** Settings → Reader → Paged → Zoom to panel, or the switch in the reader's sheet. The bubble gesture on artwork then zooms the page to frame the panel under it; another one zooms back out. It finds panels by the white gutters between them, so it skips borderless panels and dark pages, where it zooms in as usual.
+
+### Improved
+- **Tap another bubble while one is open** and it opens in its place. A tap on the open bubble, or anywhere else, closes it as before.
+
+## [v1.5.0] - 2026-10-08
 
 ### Added
 - **A new icon**, designed by a reader from the community: an open book of panels, with a speech bubble saying 折.

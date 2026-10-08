@@ -96,7 +96,8 @@ fun ImageViewer(
                 // An open speech bubble takes the next touch - and the rest of a double tap - to
                 // close, and nothing else: no page turn, menu or zoom from the same tap.
                 if (state.bubbleShown) {
-                    state.dismissBubble()
+                    val tap = Offset(firstDown.position.x / state.width, firstDown.position.y / state.height)
+                    scope.launch { state.tapOnBubble(tap) }
                     view.parent?.requestDisallowInterceptTouchEvent(true)
                     firstDown.consume()
                     do {
@@ -194,6 +195,8 @@ fun ImageViewer(
                             }
                             if (!state.doubleTapZoomEnabled) return@launch
                             if (zoomPage.atHomeScale) {
+                                // On a panel, frame it - see PanelZoom - else zoom in a step.
+                                if (state.zoomToPanel(Offset(tapX, tapY))) return@launch
                                 zoomPage.animateTo(
                                     Offset(tapX, tapY), targetScale = zoomPage.doubleTapScale,
                                     animationSpec = state.doubleTapZoomSpec(),

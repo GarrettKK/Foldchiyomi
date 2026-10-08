@@ -43,6 +43,8 @@ The enlarged bubble is upscaled by ArtCNN, a small neural network for line art t
 
 It finds the bubble right on your phone, from the page itself: the light paper inside a dark outline, with lettering in it. That covers most manga, and Western comics' speech bubbles and narration boxes too. Text without a bubble and bubbles with no outline aren't picked up, and there double-tap zooms in as usual.
 
+While a bubble is open, tap the next one and it opens in its place. Prefer a long press to a double tap? Pick it under **Bubble zoom gesture**. And with **Zoom to panel** on, the same gesture on artwork zooms the page to the panel under it.
+
 Don't want it? Turn it off in **Settings → Reader → Paged → Bubble zoom**, or from the reader's settings sheet.
 
 ## Made for a mixed library

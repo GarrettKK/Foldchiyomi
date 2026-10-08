@@ -344,6 +344,10 @@ private fun ColumnScope.WebGpuViewerSettings(viewModel: ReaderSettingsViewModel)
             label = stringResource(MR.strings.pref_bubble_zoom),
             pref = viewModel.preferences.bubbleZoom,
         )
+        CheckboxItem(
+            label = stringResource(MR.strings.pref_panel_zoom),
+            pref = viewModel.preferences.panelZoom,
+        )
     }
 
     if (isDual) {
