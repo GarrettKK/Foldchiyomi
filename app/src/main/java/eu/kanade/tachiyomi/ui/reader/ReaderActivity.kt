@@ -527,6 +527,13 @@ class ReaderActivity : BaseActivity() {
                 menuToggleToast = toast(if (enabled) MR.strings.on else MR.strings.off)
             },
             onClickSettings = viewModel::openSettingsDialog,
+            onClickShiftSpread = (state.viewer as? WebGpuViewer)?.takeIf { it.isDualPageMode() }?.let { viewer ->
+                {
+                    val shifted = viewer.toggleSpreadShift()
+                    menuToggleToast?.cancel()
+                    menuToggleToast = toast(if (shifted) MR.strings.spread_shifted else MR.strings.spread_unshifted)
+                }
+            },
         )
     }
 

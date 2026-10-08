@@ -221,6 +221,10 @@ class ReaderPreferences(
     /** Double-tap a speech bubble to open it enlarged over the page. */
     val bubbleZoom: Preference<Boolean> = preferenceStore.getBoolean("webgpu_bubble_zoom", true)
 
+    /** Which gesture opens a bubble. */
+    val bubbleZoomGesture: Preference<BubbleZoomGesture> =
+        preferenceStore.getEnum("webgpu_bubble_zoom_gesture", BubbleZoomGesture.DOUBLE_TAP)
+
     val cutoutModeDual: Preference<CutoutMode> = preferenceStore.getEnum("webgpu_dual_cutout_mode", CutoutMode.IGNORE)
 
     val continuousMinWidth: Preference<Int> = preferenceStore.getInt("webgpu_continuous_minwidth", 100)
@@ -288,6 +292,13 @@ class ReaderPreferences(
         IGNORE(MR.strings.cutout_mode_ignore),
         AVOID(MR.strings.cutout_mode_avoid),
         SHIFT(MR.strings.cutout_mode_shift),
+    }
+
+    enum class BubbleZoomGesture(val titleRes: StringResource) {
+        DOUBLE_TAP(MR.strings.bubble_zoom_gesture_double_tap),
+
+        /** A long press that finds no bubble opens the page's menu, as it always has. */
+        LONG_PRESS(MR.strings.bubble_zoom_gesture_long_press),
     }
 
     enum class DualPageView(val titleRes: StringResource) {

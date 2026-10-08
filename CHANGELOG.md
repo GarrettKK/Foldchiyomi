@@ -2,7 +2,19 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
-## [v1.4.0] - Unreleased
+## [v1.5.0] - Unreleased
+
+### Added
+- **A new icon**, designed by a reader from the community: an open book of panels, with a speech bubble saying 折.
+- **Shift spread pages.** A button in the reader's bottom bar, shown in two-page view, pairs the chapter's pages the other way round, for a chapter whose first page is half of a spread rather than a lone cover.
+- **Fit height and original size apply to two-page spreads.** Pick them under scale type, and a spread grows past the screen's width, to pan.
+- **Bubble zoom by long press.** Settings → Reader → Paged → Bubble zoom gesture. A long press that finds no bubble opens the page menu as before.
+
+### Improved
+- Bubble zoom opens faster, and follows the double tap animation speed setting: Fast and No animation apply to it too.
+- In two-page view, a bubble cut by the seam between the pages now opens; before, touching the page's inner edge disqualified it.
+
+## [v1.4.0] - 2026-10-02
 
 ### Added
 - An empty library now shows how to read comics already on your phone, in three steps with a picture of the folder layout, and buttons to open Local source and the storage folder setting.

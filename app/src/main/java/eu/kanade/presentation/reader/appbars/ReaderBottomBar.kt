@@ -27,6 +27,8 @@ fun ReaderBottomBar(
     onClickCropBorder: () -> Unit,
     onClickSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Null where there is no spread to shift - a single page, or a webtoon. */
+    onClickShiftSpread: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -53,6 +55,15 @@ fun ReaderBottomBar(
                 painter = painterResource(if (cropEnabled) R.drawable.ic_crop_24dp else R.drawable.ic_crop_off_24dp),
                 contentDescription = stringResource(MR.strings.pref_crop_borders),
             )
+        }
+
+        if (onClickShiftSpread != null) {
+            IconButton(onClick = onClickShiftSpread) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_shift_spread_24dp),
+                    contentDescription = stringResource(MR.strings.action_shift_spread),
+                )
+            }
         }
 
         IconButton(onClick = onClickSettings) {

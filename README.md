@@ -51,7 +51,7 @@ Open a series for the first time and the reader asks how it reads, right to left
 
 ## The icon
 
-折 (*ori*) means "to fold": the fold of the phone, and the fold of the page.
+An open book of panels, and a speech bubble saying 折 (*ori*), "to fold": the fold of the phone, and the fold of the page. The icon was designed by a reader from the community, who offered it after trying the app.
 
 ## Everything else is Mihon
 
@@ -96,7 +96,6 @@ Pushing a `v*` tag builds, signs and publishes a release. See [`.github/workflow
 - [Mihon](https://github.com/mihonapp/mihon) and the Tachiyomi project, Apache-2.0: the whole app this is built on.
 - [webgpuviewer](https://github.com/mpreg-ca/webgpuviewer) by w, MIT: the WebGPU page viewer the curl is built into. It is carried in-tree as the `:webgpuviewer` module, taken from upstream tag 49, with its license in [`webgpuviewer/LICENSE`](webgpuviewer/LICENSE). Its prebuilt native library `libresize.so` is taken from the published 49 AAR at build time.
 
-- The 折 in the icon is drawn from [Noto Serif JP](https://github.com/notofonts/noto-cjk) (SIL Open Font License 1.1).
 
 Foldchiyomi is not affiliated with or endorsed by the Mihon project. The developer(s) of this application have no affiliation with the content providers available, and this application hosts zero content.
 

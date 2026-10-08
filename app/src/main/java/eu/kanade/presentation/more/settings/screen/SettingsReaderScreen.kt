@@ -206,6 +206,7 @@ object SettingsReaderScreen : SearchableSettings {
         val rotateToFit by rotateToFitPref.collectAsState()
         // The WebGPU reader can't split or rotate wide pages, and has scale types of its own.
         val webGpu by LocalContext.current.appGraph.basePreferences.highQualityRenderer.collectAsState()
+        val bubbleZoom by readerPreferences.bubbleZoom.collectAsState()
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pager_viewer),
@@ -236,8 +237,6 @@ object SettingsReaderScreen : SearchableSettings {
                         .filter { (_, it) -> !webGpu || it in ReaderPreferences.ImageScaleTypeWebGpuViewer }
                         .associate { (index, it) -> index to stringResource(it) },
                     title = stringResource(MR.strings.pref_image_scale_type),
-                    // The current choice, as by default - and for WebGPU, that a spread always fits.
-                    subtitle = if (webGpu) "%s (" + stringResource(MR.strings.pref_image_scale_type_single) + ")" else "%s",
                 ),
                 Preference.PreferenceItem.ListPreference(
                     preference = readerPreferences.zoomStart,
@@ -269,6 +268,12 @@ object SettingsReaderScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_bubble_zoom),
                     subtitle = stringResource(MR.strings.pref_bubble_zoom_summary),
                 ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = readerPreferences.bubbleZoomGesture,
+                    entries = ReaderPreferences.BubbleZoomGesture.entries.associateWith { stringResource(it.titleRes) },
+                    title = stringResource(MR.strings.pref_bubble_zoom_gesture),
+                    enabled = bubbleZoom,
+                ).takeIf { webGpu },
                 Preference.PreferenceItem.ListPreference(
                     preference = readerPreferences.dualPageView,
                     entries = ReaderPreferences.DualPageView.entries.associateWith { stringResource(it.titleRes) },
