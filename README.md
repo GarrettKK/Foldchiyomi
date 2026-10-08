@@ -79,6 +79,10 @@ Updates are published there too, and the app tells you when a new one is out (**
 
 This fork was vibe-coded: the page curl and the packaging were written together with an AI coding assistant (Claude), then tested by hand on real devices. It works well for me, but it hasn't been through the kind of review Mihon's own code gets. Please report bugs in [Issues](https://github.com/GarrettKK/Foldchiyomi/issues), not to the Mihon team: they don't support forks.
 
+## Found a bug?
+
+Open an [issue](https://github.com/GarrettKK/Foldchiyomi/issues/new/choose), please, rather than a Reddit comment: comments get lost, issues get fixed. Say which device you're on, which version of Foldchiyomi, and what you were reading when it happened. A screenshot or a screen recording helps a lot.
+
 ## Building
 
 Use JDK 21 and the Android SDK, then run:

@@ -1028,7 +1028,7 @@ open class WebGpuViewer(
                 }
                 if (config.bubbleZoomGesture == ReaderPreferences.BubbleZoomGesture.LONG_PRESS) {
                     // A bubble under the finger opens; anything else is the menu as before.
-                    scope.launch { if (!pager.state.showBubble(offset)) pageMenu() }
+                    this@WebGpuViewer.scope.launch { if (!pager.state.showBubble(offset)) pageMenu() }
                 } else {
                     pageMenu()
                 }
