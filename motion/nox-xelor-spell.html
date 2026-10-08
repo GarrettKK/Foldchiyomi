@@ -1,0 +1,630 @@
+<title>Noximilien's Dial</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap">
+<style>
+  /* Layout: a single dark stage (Nox's clock tower at night), a brass HUD over the canvas,
+     a thin control rail beneath, then the five movements written out. One committed look, no light theme. */
+  :root {
+    --bg: #060a12;
+    --bg-2: #0d1526;
+    --fg: #ece5d2;
+    --fg-dim: #8f93a3;
+    --brass: #d9aa4c;
+    --brass-dim: #6d5120;
+    --wakfu: #4fdcff;
+    --wakfu-deep: #1a7fc4;
+    --line: rgba(217, 170, 76, .28);
+    --display: 'Cinzel', 'Times New Roman', serif;
+    --body: 'Cormorant Garamond', Georgia, serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--body);
+    font-size: 18px;
+    line-height: 1.5;
+    padding-block: 0 3rem;
+    padding-inline: 16px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 1.25rem; }
+  .masthead {
+    display: grid; gap: .35rem;
+    padding-block: 1.5rem .25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow {
+    font-family: var(--display); font-size: .72rem; letter-spacing: .22em; text-transform: uppercase;
+    color: var(--brass); margin: 0;
+  }
+  h1 {
+    font-family: var(--display); font-weight: 600; font-size: clamp(1.9rem, 4.5vw, 3rem);
+    margin: 0; line-height: 1.1; text-wrap: balance; letter-spacing: .02em;
+  }
+  .lede { margin: 0; max-width: 62ch; color: var(--fg-dim); font-size: 1.1rem; font-style: italic; }
+
+  .stage {
+    position: relative; width: 100%; max-width: 100%;
+    aspect-ratio: 16 / 10; max-height: 78vh;
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    overflow: hidden;
+  }
+  @media (max-width: 560px) { .stage { aspect-ratio: 4 / 5; } }
+  canvas { display: block; width: 100%; height: 100%; }
+  .hud {
+    position: absolute; inset: auto 0 0 0;
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem;
+    padding: .75rem 1rem;
+    font-family: var(--display); font-size: .7rem; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--brass); pointer-events: none;
+    background: linear-gradient(to top, rgba(6,10,18,.85), rgba(6,10,18,0));
+  }
+  .hud .phase { font-size: .8rem; }
+  .hud .read { display: grid; gap: .15rem; text-align: right; font-variant-numeric: tabular-nums; }
+  .hud .read span { color: var(--fg); }
+  .hud .read b { color: var(--wakfu); font-weight: 600; }
+  .corner {
+    position: absolute; top: .75rem; pointer-events: none;
+    font-family: var(--display); font-size: .62rem; letter-spacing: .18em; text-transform: uppercase; color: var(--fg-dim);
+  }
+  .corner.l { left: 1rem; } .corner.r { right: 1rem; }
+
+  .controls {
+    display: grid; gap: .9rem;
+    grid-template-columns: auto auto auto 1fr;
+    align-items: center;
+  }
+  @media (max-width: 700px) { .controls { grid-template-columns: 1fr 1fr; } .controls .scrub { grid-column: 1 / -1; } }
+  button, select {
+    font-family: var(--display); font-size: .74rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--brass); background: transparent;
+    border: 1px solid var(--brass-dim); padding: .6rem 1rem; cursor: pointer;
+  }
+  button.primary { background: var(--brass); color: var(--bg); border-color: var(--brass); }
+  button:hover, select:hover { border-color: var(--brass); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--wakfu); outline-offset: 2px; }
+  .scrub { display: grid; gap: .3rem; min-width: 0; }
+  .scrub input { width: 100%; accent-color: var(--brass); }
+  .ticks {
+    display: grid; grid-template-columns: 2fr 2.5fr 3fr 1.5fr 3fr; /* proportional to each movement's length */
+    font-family: var(--display); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-dim);
+  }
+  .ticks span { border-left: 1px solid var(--line); padding-left: .35rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ticks span.on { color: var(--brass); }
+
+  .movements { display: grid; gap: 0; border-top: 1px solid var(--line); margin-top: .5rem; }
+  .movements article {
+    display: grid; grid-template-columns: 4.5rem 1fr; gap: 1rem; align-items: baseline;
+    padding-block: 1rem; border-bottom: 1px solid var(--line);
+  }
+  .movements .num { font-family: var(--display); color: var(--brass); font-size: 1.4rem; }
+  .movements h2 { font-family: var(--display); font-size: 1rem; font-weight: 600; margin: 0 0 .2rem; letter-spacing: .04em; }
+  .movements p { margin: 0; color: var(--fg-dim); max-width: 65ch; }
+  .reduced { display: none; }
+  @media (prefers-reduced-motion: reduce) { .reduced { display: block; color: var(--fg-dim); font-size: .95rem; margin: 0; } }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Xelor · Temporal magic · Wakfu</p>
+    <h1>Noximilien's Dial</h1>
+    <p class="lede">A clockwork casting in five movements. The dial winds, the numerals wake backwards, the sandglass pulls the Wakfu inward, the hands snap to twelve, and time is given back.</p>
+  </header>
+
+  <section class="stage" aria-label="Animated Xelor spell">
+    <canvas id="c" role="img" aria-label="A brass clock dial and hourglass drawing blue Wakfu energy inward, then bursting and rewinding."></canvas>
+    <span class="corner l">Clock tower · 3rd gear deck</span>
+    <span class="corner r">Loop 12 s</span>
+    <div class="hud">
+      <span class="phase" id="phase">I · Winding</span>
+      <div class="read">
+        <span>Rewound <b id="rewound">−00:00:00</b></span>
+        <span>Wakfu drawn <b id="wakfu">0.0 %</b></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="controls" aria-label="Playback">
+    <button class="primary" id="cast" type="button">Cast again</button>
+    <button id="pause" type="button">Pause</button>
+    <select id="speed" aria-label="Playback speed">
+      <option value="0.5">½ speed</option>
+      <option value="1" selected>1× speed</option>
+      <option value="1.6">1.6× speed</option>
+    </select>
+    <div class="scrub">
+      <input type="range" id="scrub" min="0" max="12000" step="10" value="0" aria-label="Timeline, milliseconds">
+      <div class="ticks" id="ticks">
+        <span>I Winding</span><span>II Dial</span><span>III Sandglass</span><span>IV Burst</span><span>V Rewind</span>
+      </div>
+    </div>
+  </section>
+  <p class="reduced">Reduced motion is on, so the spell starts paused on the sandglass movement. Press Cast again to run it.</p>
+
+  <section class="movements" aria-label="The five movements">
+    <article><span class="num">I</span><div><h2>Winding</h2><p>Dust and loose Wakfu drift toward the centre. The outer ring of the dial is drawn in a single counter-clockwise stroke while the gear decks start to turn.</p></div></article>
+    <article><span class="num">II</span><div><h2>The Dial</h2><p>The Roman numerals light from XII backwards to I, the direction a Xelor reads time. The minute hand begins to run in reverse and picks up speed.</p></div></article>
+    <article><span class="num">III</span><div><h2>Sandglass</h2><p>The hourglass forms at the pivot. Sand falls upward. Twelve threads of Wakfu spiral in from the edge of the dial and the first arcs jump from the rim.</p></div></article>
+    <article><span class="num">IV</span><div><h2>Temporal Burst</h2><p>Both hands snap to twelve. Three shockwave rings leave the dial, the gears overspeed and lightning bridges every tooth to the glass.</p></div></article>
+    <article><span class="num">V</span><div><h2>Rewind</h2><p>The hands spin forward through every stolen hour, the glass dissolves, the numerals go dark in the order they woke and the ring unwinds to nothing.</p></div></article>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const css = getComputedStyle(document.documentElement);
+  const C = {
+    bg: css.getPropertyValue('--bg').trim() || '#060a12',
+    bg2: css.getPropertyValue('--bg-2').trim() || '#0d1526',
+    brass: css.getPropertyValue('--brass').trim() || '#d9aa4c',
+    brassDim: css.getPropertyValue('--brass-dim').trim() || '#6d5120',
+    wakfu: css.getPropertyValue('--wakfu').trim() || '#4fdcff',
+    wakfuDeep: css.getPropertyValue('--wakfu-deep').trim() || '#1a7fc4',
+    fg: css.getPropertyValue('--fg').trim() || '#ece5d2',
+  };
+  const TAU = Math.PI * 2;
+  const DUR = 12;                       // seconds per loop
+  const PHASES = [
+    { name: 'I · Winding', from: 0, to: 2 },
+    { name: 'II · The Dial', from: 2, to: 4.5 },
+    { name: 'III · Sandglass', from: 4.5, to: 7.5 },
+    { name: 'IV · Temporal Burst', from: 7.5, to: 9 },
+    { name: 'V · Rewind', from: 9, to: 12 },
+  ];
+  const BURST = 7.5;
+
+  // ---------- small math ----------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const ph = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
+  const smooth = t => t * t * (3 - 2 * t);
+  const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+  const easeInCubic = t => t * t * t;
+  const easeInOutQuart = t => t < .5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
+  const easeOutBack = t => { const c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+  // piecewise curve through [time, value] keys with smoothstep between keys
+  function pw(t, keys) {
+    if (t <= keys[0][0]) return keys[0][1];
+    for (let i = 1; i < keys.length; i++) {
+      if (t <= keys[i][0]) {
+        const [t0, v0] = keys[i - 1], [t1, v1] = keys[i];
+        return lerp(v0, v1, smooth((t - t0) / (t1 - t0)));
+      }
+    }
+    return keys[keys.length - 1][1];
+  }
+  // deterministic pseudo random
+  function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+  const rand = rng(7);
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+
+  // ---------- spell curves ----------
+  const energy = t => pw(t, [[0, 0], [2, .22], [4.5, .5], [7.5, .9], [7.65, 1.3], [8.2, .85], [9, .7], [11.4, 0], [12, 0]]);
+  // minute-hand reverse speed (rad/s), integrated into a lookup so scrubbing is deterministic
+  const handSpeed = t => pw(t, [[0, 0], [2, .5], [4.5, 3.5], [7.4, 16], [7.5, 0], [12, 0]]);
+  const CUM = new Float32Array(DUR * 1000 + 1);
+  for (let i = 1; i < CUM.length; i++) CUM[i] = CUM[i - 1] + handSpeed(i / 1000) * 0.001;
+  const cum = t => CUM[clamp(Math.round(t * 1000), 0, CUM.length - 1)];
+  const snapUp = a => -Math.ceil(a / TAU) * TAU;   // next full turn so the hand points at XII
+  function handAngles(t) {
+    const base = cum(t);
+    let minute = -base, hour = -base / 12;
+    if (t >= BURST) {
+      const sMin = snapUp(cum(BURST)), sHour = snapUp(cum(BURST) / 12);
+      const k = easeOutCubic(ph(t, BURST, BURST + .25));
+      minute = lerp(-cum(BURST), sMin, k);
+      hour = lerp(-cum(BURST) / 12, sHour, k);
+      if (t >= 9) {
+        const r = easeInOutQuart(ph(t, 9.2, 11.6));
+        minute = lerp(sMin, 0, r);
+        hour = lerp(sHour, 0, r);
+      }
+    }
+    return { minute, hour };
+  }
+
+  // ---------- scene state ----------
+  const motes = Array.from({ length: 170 }, () => ({ a: rand() * TAU, r: .15 + rand() * 1.05, s: .3 + rand() * .7, z: rand() }));
+  const runeKinds = Array.from({ length: 8 }, (_, i) => i % 4);
+  let bolts = [], boltStamp = 0;
+  let W = 0, H = 0, dpr = 1;
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.max(1, Math.round(rect.width)); H = Math.max(1, Math.round(rect.height));
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- drawing helpers ----------
+  function gear(cx, cy, r, teeth, th, rot, color, alpha, lw) {
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(rot);
+    ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineJoin = 'miter';
+    ctx.beginPath();
+    for (let i = 0; i < teeth; i++) {
+      const a0 = i / teeth * TAU, a1 = (i + .25) / teeth * TAU, a2 = (i + .5) / teeth * TAU, a3 = (i + .75) / teeth * TAU;
+      const R = r + th;
+      if (i === 0) ctx.moveTo(Math.cos(a0) * r, Math.sin(a0) * r);
+      ctx.lineTo(Math.cos(a0 + .02) * R, Math.sin(a0 + .02) * R);
+      ctx.lineTo(Math.cos(a1) * R, Math.sin(a1) * R);
+      ctx.lineTo(Math.cos(a1 + .02) * r, Math.sin(a1 + .02) * r);
+      ctx.lineTo(Math.cos(a2) * r, Math.sin(a2) * r);
+      ctx.lineTo(Math.cos(a2 + .02) * R, Math.sin(a2 + .02) * R);
+      ctx.lineTo(Math.cos(a3) * R, Math.sin(a3) * R);
+      ctx.lineTo(Math.cos(a3 + .02) * r, Math.sin(a3 + .02) * r);
+    }
+    ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r * .72, 0, TAU); ctx.stroke();
+    const spokes = 6;
+    ctx.beginPath();
+    for (let i = 0; i < spokes; i++) {
+      const a = i / spokes * TAU;
+      ctx.moveTo(Math.cos(a) * r * .28, Math.sin(a) * r * .28);
+      ctx.lineTo(Math.cos(a) * r * .72, Math.sin(a) * r * .72);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function makeBolt(x0, y0, x1, y1, jag) {
+    const pts = [[x0, y0], [x1, y1]];
+    const sub = (p, q, d) => {
+      if (d === 0) return [p];
+      const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+      const dx = q[0] - p[0], dy = q[1] - p[1];
+      const len = Math.hypot(dx, dy);
+      const off = (Math.random() - .5) * jag * len;
+      const m = [mx + (-dy / len) * off, my + (dx / len) * off];
+      return sub(p, m, d - 1).concat(sub(m, q, d - 1));
+    };
+    return sub(pts[0], pts[1], 5).concat([pts[1]]);
+  }
+  function strokePath(pts, color, lw, alpha) {
+    ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.stroke();
+  }
+
+  function hand(cx, cy, ang, len, wid, alpha) {
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(ang);
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.moveTo(-wid * .6, 0); ctx.lineTo(0, -len); ctx.lineTo(wid * .6, 0); ctx.lineTo(0, len * .18); ctx.closePath();
+    ctx.fillStyle = C.brass; ctx.fill();
+    ctx.strokeStyle = C.wakfu; ctx.lineWidth = 1; ctx.globalAlpha = alpha * .9; ctx.stroke();
+    ctx.restore();
+  }
+
+  function hourglass(cx, cy, h, sand, alpha, glow) {
+    const w = h * .62, neck = h * .06;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.globalAlpha = alpha;
+    // sand: bottom chamber empties, top chamber fills (time runs backwards)
+    const fillTri = (level, top) => {
+      // level 0..1 of chamber height; top chamber fills from its floor (the neck) upward
+      if (level <= 0) return;
+      const hh = h / 2, hw = w / 2;
+      ctx.beginPath();
+      if (top) {
+        const y0 = -neck, y1 = -neck - level * (hh - neck);
+        const wAt = y => hw * ((-y - neck) / (hh - neck));
+        ctx.moveTo(-neck * .5, y0); ctx.lineTo(neck * .5, y0);
+        ctx.lineTo(wAt(y1) + neck * .5, y1); ctx.lineTo(-wAt(y1) - neck * .5, y1);
+      } else {
+        const y0 = hh, y1 = hh - level * (hh - neck);
+        const wAt = y => hw * ((y - neck) / (hh - neck));
+        ctx.moveTo(-hw, y0); ctx.lineTo(hw, y0);
+        ctx.lineTo(wAt(y1) + neck * .5, y1); ctx.lineTo(-wAt(y1) - neck * .5, y1);
+      }
+      ctx.closePath();
+      ctx.fillStyle = C.brass; ctx.globalAlpha = alpha * .9; ctx.fill();
+    };
+    fillTri(1 - sand, false);
+    fillTri(sand, true);
+    // rising sand stream through the neck
+    if (sand > 0 && sand < 1) {
+      ctx.globalAlpha = alpha;
+      for (let i = 0; i < 14; i++) {
+        const u = ((performance.now() / 700 + i / 14) % 1);
+        const y = h * .5 - u * h;           // bottom to top
+        const x = Math.sin(u * 20 + i) * neck * .35;
+        ctx.fillStyle = i % 3 ? C.brass : C.wakfu;
+        ctx.beginPath(); ctx.arc(x, y, 1.4, 0, TAU); ctx.fill();
+      }
+    }
+    // glass
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = C.wakfu; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-w / 2, -h / 2); ctx.quadraticCurveTo(-w * .05, -h * .05, -neck * .5, 0);
+    ctx.quadraticCurveTo(-w * .05, h * .05, -w / 2, h / 2);
+    ctx.moveTo(w / 2, -h / 2); ctx.quadraticCurveTo(w * .05, -h * .05, neck * .5, 0);
+    ctx.quadraticCurveTo(w * .05, h * .05, w / 2, h / 2);
+    ctx.stroke();
+    ctx.globalAlpha = alpha * glow * .35; ctx.lineWidth = 8; ctx.stroke();
+    // brass caps
+    ctx.globalAlpha = alpha; ctx.strokeStyle = C.brass; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-w / 2 - 6, -h / 2); ctx.lineTo(w / 2 + 6, -h / 2);
+    ctx.moveTo(-w / 2 - 6, h / 2); ctx.lineTo(w / 2 + 6, h / 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  function rune(kind, s) {
+    ctx.beginPath();
+    if (kind === 0) { ctx.arc(0, 0, s, 0, TAU); ctx.moveTo(-s, 0); ctx.lineTo(s, 0); }
+    else if (kind === 1) { ctx.moveTo(0, -s); ctx.lineTo(s, s); ctx.lineTo(-s, s); ctx.closePath(); ctx.moveTo(0, -s * .2); ctx.lineTo(0, s); }
+    else if (kind === 2) { ctx.rect(-s * .7, -s * .7, s * 1.4, s * 1.4); ctx.moveTo(-s, 0); ctx.lineTo(s, 0); ctx.moveTo(0, -s); ctx.lineTo(0, s); }
+    else { ctx.moveTo(0, -s); ctx.lineTo(0, s); ctx.moveTo(-s * .8, -s * .3); ctx.lineTo(s * .8, -s * .3); ctx.arc(0, s * .3, s * .4, 0, TAU); }
+    ctx.stroke();
+  }
+
+  const NUMERALS = ['XII', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+
+  // ---------- frame ----------
+  function draw(t, dt) {
+    const cx = W / 2, cy = H / 2;
+    const R = Math.min(W, H) * .40;
+    const E = energy(t);
+
+    // ground
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * .7);
+    g.addColorStop(0, C.bg2); g.addColorStop(1, C.bg);
+    ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // centre glow
+    const glowR = R * (0.35 + E * 1.1);
+    const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+    cg.addColorStop(0, hexA(C.wakfu, .32 * clamp(E, 0, 1)));
+    cg.addColorStop(.4, hexA(C.wakfuDeep, .14 * clamp(E, 0, 1)));
+    cg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+
+    // motes drifting to the pivot
+    for (const m of motes) {
+      m.r -= dt * (0.02 + E * 0.22) * m.s;
+      m.a += dt * 0.08 * E;
+      if (m.r < 0.08) { m.r = 1.15 + rand() * .1; m.a = rand() * TAU; }
+      const x = cx + Math.cos(m.a) * m.r * R * 1.25, y = cy + Math.sin(m.a) * m.r * R * 1.25;
+      ctx.globalAlpha = (0.25 + 0.6 * (1 - m.r)) * (0.3 + E);
+      ctx.fillStyle = m.z > .7 ? C.wakfu : C.brass;
+      ctx.beginPath(); ctx.arc(x, y, m.z > .7 ? 1.6 : 1, 0, TAU); ctx.fill();
+    }
+
+    // dial ring: drawn counter-clockwise from XII, unwound in the rewind
+    let ring = easeOutCubic(ph(t, .3, 2.3));
+    if (t >= 9) ring = 1 - easeInCubic(ph(t, 9.8, 11.7));
+    if (ring > 0) {
+      const start = -Math.PI / 2;
+      ctx.globalAlpha = .9; ctx.strokeStyle = C.brass; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, R, start, start - ring * TAU, true); ctx.stroke();
+      ctx.globalAlpha = .45; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(cx, cy, R * .9, start, start - ring * TAU, true); ctx.stroke();
+      // 60 ticks
+      ctx.globalAlpha = .8; ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < 60; i++) {
+        if (i / 60 > ring) break;
+        const a = start - i / 60 * TAU;
+        const inner = i % 5 === 0 ? R * .93 : R * .965;
+        ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+        ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+      }
+      ctx.stroke();
+      // outer wakfu halo of the ring
+      ctx.globalAlpha = .18 * E; ctx.strokeStyle = C.wakfu; ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.arc(cx, cy, R, start, start - ring * TAU, true); ctx.stroke();
+    }
+
+    // numerals: wake XII → XI → X … I (backwards), sleep again in the rewind
+    const woke = ph(t, 2, 4.4) * 12;
+    const slept = t >= 9 ? ph(t, 9.3, 11.2) * 12 : 0;
+    ctx.font = `600 ${Math.round(R * .11)}px Cinzel, 'Times New Roman', serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let k = 0; k < 12; k++) {
+      // k-th to wake: 0 → XII, 1 → XI, 2 → X …
+      const idx = (12 - k) % 12;
+      let a = clamp(woke - k, 0, 1);
+      if (t >= 9) a = 1 - clamp(slept - k, 0, 1);
+      if (a <= 0) continue;
+      const ang = -Math.PI / 2 + idx / 12 * TAU;
+      const rr = R * .80;
+      const x = cx + Math.cos(ang) * rr, y = cy + Math.sin(ang) * rr;
+      ctx.globalAlpha = a * .25 * (0.5 + E); ctx.fillStyle = C.wakfu;
+      ctx.fillText(NUMERALS[idx], x, y + 1);
+      ctx.globalAlpha = a; ctx.fillStyle = C.fg;
+      ctx.fillText(NUMERALS[idx], x, y);
+    }
+
+    // gear decks
+    const gearA = ph(t, .6, 2.2), gearOut = t >= 9 ? 1 - ph(t, 10, 11.8) : 1;
+    const drive = cum(t) + (t >= 9 ? (1 - easeInOutQuart(ph(t, 9.2, 11.6))) * 0 : 0);
+    const spinExtra = t >= 9 ? -(easeInOutQuart(ph(t, 9.2, 11.6))) * 9 : 0;
+    if (gearA > 0 && gearOut > 0) {
+      const al = gearA * gearOut;
+      gear(cx, cy, R * .62, 36, R * .035, drive * .12 + spinExtra * .12 + t * .05, C.brassDim, al * .9, 1.2);
+      gear(cx, cy, R * .46, 24, R * .035, -(drive * .18 + spinExtra * .18) - t * .07, C.brass, al * .75, 1);
+      const sat = R * .78;
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + i / 3 * TAU + Math.PI / 3;
+        gear(cx + Math.cos(a) * sat, cy + Math.sin(a) * sat, R * .09, 10, R * .02, -(drive * .6 + spinExtra * .6) + i, C.brassDim, al * .7, 1);
+      }
+    }
+
+    // wakfu threads spiralling in
+    const thr = t < 9 ? smooth(ph(t, 4.7, 6)) : 1 - smooth(ph(t, 9, 10.2));
+    if (thr > 0) {
+      const N = 12, SEG = 26;
+      for (let i = 0; i < N; i++) {
+        const a0 = i / N * TAU + t * .35;
+        for (let pass = 0; pass < 2; pass++) {
+          ctx.lineWidth = pass ? 1 : 5;
+          ctx.strokeStyle = pass ? C.wakfu : C.wakfuDeep;
+          ctx.lineCap = 'round';
+          for (let s = 0; s < SEG; s++) {
+            const u0 = s / SEG, u1 = (s + 1) / SEG;
+            const p = u => [cx + Math.cos(a0 + u * 2.4) * lerp(R * 1.18, R * .16, u), cy + Math.sin(a0 + u * 2.4) * lerp(R * 1.18, R * .16, u)];
+            const [x0, y0] = p(u0), [x1, y1] = p(u1);
+            ctx.globalAlpha = thr * (pass ? .75 : .18) * (0.15 + u0 * .85) * clamp(E, 0, 1);
+            ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+          }
+        }
+        // travelling sparks
+        for (let k = 0; k < 2; k++) {
+          const u = ((t * (.55 + E * .5) + i * .137 + k * .5) % 1);
+          const x = cx + Math.cos(a0 + u * 2.4) * lerp(R * 1.18, R * .16, u), y = cy + Math.sin(a0 + u * 2.4) * lerp(R * 1.18, R * .16, u);
+          ctx.globalAlpha = thr; ctx.fillStyle = C.fg;
+          ctx.beginPath(); ctx.arc(x, y, 1.8, 0, TAU); ctx.fill();
+          ctx.globalAlpha = thr * .5; ctx.fillStyle = C.wakfu;
+          ctx.beginPath(); ctx.arc(x, y, 4, 0, TAU); ctx.fill();
+        }
+      }
+    }
+
+    // orbiting runes
+    const runeA = t < 9 ? smooth(ph(t, 5, 6.2)) : 1 - smooth(ph(t, 9, 9.9));
+    if (runeA > 0) {
+      ctx.strokeStyle = C.wakfu; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+      for (let i = 0; i < 8; i++) {
+        const a = -t * .6 + i / 8 * TAU;
+        const rr = R * .33;
+        ctx.save();
+        ctx.translate(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+        ctx.rotate(a + Math.PI / 2);
+        ctx.globalAlpha = runeA * (0.6 + 0.4 * Math.sin(t * 5 + i));
+        rune(runeKinds[i], R * .028);
+        ctx.restore();
+      }
+    }
+
+    // sandglass
+    let hg = easeOutBack(ph(t, 4.5, 5.3));
+    let hgA = ph(t, 4.5, 4.9);
+    if (t >= 9) { hgA = 1 - ph(t, 9.3, 10.4); hg = 1 - easeInCubic(ph(t, 9.3, 10.4)) * .3; }
+    let sand = ph(t, 5.3, 7.5);
+    if (t >= 9) sand = 1 - ph(t, 9, 10.2);
+    if (hgA > 0 && hg > 0) hourglass(cx, cy, R * .5 * hg, sand, hgA, E);
+
+    // hands
+    const handA = ph(t, 2.2, 3) * (t >= 9 ? 1 - ph(t, 11.2, 11.9) : 1);
+    if (handA > 0) {
+      const { minute, hour } = handAngles(t);
+      hand(cx, cy, hour, R * .42, R * .05, handA);
+      hand(cx, cy, minute, R * .68, R * .04, handA);
+      ctx.globalAlpha = handA; ctx.fillStyle = C.brass;
+      ctx.beginPath(); ctx.arc(cx, cy, R * .035, 0, TAU); ctx.fill();
+      ctx.fillStyle = C.wakfu; ctx.beginPath(); ctx.arc(cx, cy, R * .014, 0, TAU); ctx.fill();
+    }
+
+    // lightning: occasional in the drain, constant in the burst
+    const inBurst = t >= BURST && t < 9;
+    const boltChance = inBurst ? 1 : (t > 6 && t < BURST ? (t - 6) * .5 : 0);
+    const now = performance.now();
+    if (now - boltStamp > (inBurst ? 45 : 110)) {
+      boltStamp = now; bolts = [];
+      const n = inBurst ? 5 + Math.floor(Math.random() * 4) : (Math.random() < boltChance ? 1 + Math.floor(Math.random() * 2) : 0);
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * TAU;
+        const r0 = R * (inBurst ? 1 : .98), r1 = R * (inBurst ? .18 : .3);
+        bolts.push(makeBolt(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0, cx + Math.cos(a + (Math.random() - .5)) * r1, cy + Math.sin(a + (Math.random() - .5)) * r1, .35));
+      }
+    }
+    if (bolts.length && (inBurst || t < BURST)) {
+      for (const b of bolts) {
+        strokePath(b, C.wakfuDeep, 6, .25);
+        strokePath(b, C.wakfu, 2, .9);
+        strokePath(b, C.fg, .8, 1);
+      }
+    }
+
+    // shockwaves and flash
+    if (t >= BURST && t < 9.5) {
+      for (let i = 0; i < 3; i++) {
+        const age = t - BURST - i * .14;
+        if (age < 0) continue;
+        const rr = R * .2 + age * R * 1.9;
+        const al = clamp(1 - age / 1.3, 0, 1);
+        ctx.globalAlpha = al * .8; ctx.strokeStyle = i === 1 ? C.brass : C.wakfu; ctx.lineWidth = (3 - i) * 2 * al + .5;
+        ctx.beginPath(); ctx.arc(cx, cy, rr, 0, TAU); ctx.stroke();
+      }
+      const flash = Math.pow(1 - ph(t, BURST, BURST + .4), 2);
+      if (flash > 0) {
+        ctx.globalAlpha = flash * .85; ctx.fillStyle = C.wakfu; ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = flash * .6; ctx.fillStyle = C.fg; ctx.fillRect(0, 0, W, H);
+      }
+    }
+
+    // vignette
+    const v = ctx.createRadialGradient(cx, cy, R * .9, cx, cy, Math.max(W, H) * .78);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.62)');
+    ctx.globalAlpha = 1; ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+
+    return { sand, minute: handAngles(t).minute, t };
+  }
+
+  // ---------- HUD ----------
+  const elPhase = document.getElementById('phase');
+  const elRew = document.getElementById('rewound');
+  const elWak = document.getElementById('wakfu');
+  const elScrub = document.getElementById('scrub');
+  const tickEls = Array.from(document.getElementById('ticks').children);
+  function fmt(sec) {
+    sec = Math.max(0, Math.round(sec));
+    const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    return `−${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  function hud(out) {
+    const i = PHASES.findIndex(p => out.t >= p.from && out.t < p.to);
+    const idx = i < 0 ? PHASES.length - 1 : i;
+    elPhase.textContent = PHASES[idx].name;
+    tickEls.forEach((el, k) => el.classList.toggle('on', k === idx));
+    // one full reverse turn of the minute hand is one hour taken back
+    elRew.textContent = fmt(-out.minute / TAU * 3600);
+    let wak = out.sand * 100;
+    if (out.t >= BURST && out.t < 9) wak = 100;
+    elWak.textContent = wak.toFixed(1) + ' %';
+    if (!scrubbing) elScrub.value = Math.round(out.t * 1000);
+  }
+
+  // ---------- clock ----------
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let playing = !reduced, speed = 1, tSpell = reduced ? 6.2 : 0, last = 0, scrubbing = false;
+  const btnPause = document.getElementById('pause');
+  btnPause.textContent = playing ? 'Pause' : 'Resume';
+
+  function frame(now) {
+    const dt = last ? Math.min((now - last) / 1000, .05) : 0;
+    last = now;
+    if (playing && !scrubbing) tSpell = (tSpell + dt * speed) % DUR;
+    hud(draw(tSpell, playing ? dt * speed : 0));
+    requestAnimationFrame(frame);
+  }
+
+  document.getElementById('cast').addEventListener('click', () => { tSpell = 0; playing = true; btnPause.textContent = 'Pause'; });
+  btnPause.addEventListener('click', () => { playing = !playing; btnPause.textContent = playing ? 'Pause' : 'Resume'; });
+  document.getElementById('speed').addEventListener('change', e => { speed = parseFloat(e.target.value) || 1; });
+  elScrub.addEventListener('input', e => { scrubbing = true; tSpell = parseInt(e.target.value, 10) / 1000; });
+  const endScrub = () => { scrubbing = false; };
+  elScrub.addEventListener('change', endScrub);
+  elScrub.addEventListener('pointerup', endScrub);
+  elScrub.addEventListener('keyup', endScrub);
+
+  const start = () => requestAnimationFrame(frame);
+  if (document.fonts && document.fonts.load) {
+    Promise.race([document.fonts.load('600 20px Cinzel'), new Promise(r => setTimeout(r, 1200))]).then(start, start);
+  } else start();
+})();
+</script>
