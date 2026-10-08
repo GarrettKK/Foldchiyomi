@@ -483,7 +483,12 @@
     <string name="scale_type_smart_fit">Smart fit</string>
     <string name="pref_navigate_pan">Pan wide images</string>
     <string name="pref_bubble_zoom">Bubble zoom</string>
-    <string name="pref_image_scale_type_single">single page view; a two-page spread always fits the screen</string>
+    <string name="pref_bubble_zoom_gesture">Bubble zoom gesture</string>
+    <string name="bubble_zoom_gesture_double_tap">Double tap</string>
+    <string name="bubble_zoom_gesture_long_press">Long press</string>
+    <string name="action_shift_spread">Shift spread pages</string>
+    <string name="spread_shifted">Spread shifted by one page</string>
+    <string name="spread_unshifted">Spread pairing restored</string>
     <string name="pref_bubble_zoom_summary">Double-tap a speech bubble to open it enlarged</string>
     <string name="pref_landscape_zoom">Automatically zoom into wide images</string>
     <string name="pref_zoom_start">Zoom start position</string>

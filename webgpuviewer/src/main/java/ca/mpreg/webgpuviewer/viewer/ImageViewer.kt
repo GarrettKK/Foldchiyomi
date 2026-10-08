@@ -187,7 +187,9 @@ fun ImageViewer(
                             pageTurnJob?.join()
                             val zoomPage = state.getPage(0) ?: return@launch
                             // On a speech bubble, open it enlarged instead - see BubbleZoom.
-                            if (zoomPage.atHomeScale && state.showBubble(Offset(tapX, tapY))) {
+                            if (state.bubbleZoomOnDoubleTap && zoomPage.atHomeScale &&
+                                state.showBubble(Offset(tapX, tapY))
+                            ) {
                                 return@launch
                             }
                             if (!state.doubleTapZoomEnabled) return@launch

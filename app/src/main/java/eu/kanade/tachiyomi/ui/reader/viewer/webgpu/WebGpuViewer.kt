@@ -21,6 +21,7 @@ import ca.mpreg.webgpuviewer.closeTo
 import ca.mpreg.webgpuviewer.draw.TextAlign
 import ca.mpreg.webgpuviewer.renderer.GainmapInput
 import ca.mpreg.webgpuviewer.renderer.Image
+import ca.mpreg.webgpuviewer.transition.Transition
 import ca.mpreg.webgpuviewer.transition.TransitionBasic
 import ca.mpreg.webgpuviewer.transition.TransitionCube
 import ca.mpreg.webgpuviewer.transition.TransitionCubeOuter
@@ -165,6 +166,13 @@ open class WebGpuViewer(
 
     /** Above this, an untagged page is a spread already, not half of one. */
     private val wideAspect = 1.2f
+
+    /**
+     * Chapters whose spreads are paired one page later than [spreadStartIndex] would - for a
+     * chapter whose first page is half of a spread rather than a lone cover. See
+     * [toggleSpreadShift].
+     */
+    private val shiftedChapters = HashSet<Long?>()
 
     /** How far two untagged pages' aspect ratios may differ and still pair. */
     private val pairAspectTolerance = 0.1f
@@ -847,8 +855,41 @@ open class WebGpuViewer(
      * that page broke. Defaults to 1 - page 0 is the cover, and pairs with nothing.
      */
     private fun spreadStartIndex(chapterId: Long?, index: Int): Int {
-        val lone = synchronized(lock) { loneIndices[chapterId]?.lower(index) } ?: return 1
-        return lone + 1
+        val shift = if (chapterId in shiftedChapters) 1 else 0
+        val lone = synchronized(lock) { loneIndices[chapterId]?.lower(index) } ?: return 1 + shift
+        return lone + 1 + shift
+    }
+
+    /** Whether the current chapter's spreads are shifted - see [toggleSpreadShift]. */
+    fun isSpreadShifted(): Boolean =
+        (currentPage as? ViewerReaderPage)?.page?.chapter?.chapter?.id in shiftedChapters
+
+    /**
+     * Pairs the current chapter's pages the other way round, for one whose pages don't line up
+     * into spreads as the page order suggests. Returns the new state. The chapter's spreads are
+     * rebuilt from the pages already loaded; nothing decodes again.
+     */
+    fun toggleSpreadShift(): Boolean {
+        val chapterId = (currentPage as? ViewerReaderPage)?.page?.chapter?.chapter?.id ?: return false
+        val shifted = synchronized(lock) {
+            val now = if (chapterId in shiftedChapters) {
+                shiftedChapters.remove(chapterId)
+                false
+            } else {
+                shiftedChapters.add(chapterId)
+                true
+            }
+            for (cached in pageCache.values) {
+                val reader = cached as? ViewerReaderPage ?: continue
+                if (reader.page.chapter.chapter.id != chapterId) continue
+                reader.spreadPage?.let(::cleanupImage)
+                reader.spreadPage = null
+            }
+            now
+        }
+        Transition.invalidateCache()
+        pager.state.invalidate()
+        return shifted
     }
 
     /** Registers whether [page] stands alone, for [spreadStartIndex]. Must hold [lock]. */
@@ -942,6 +983,9 @@ open class WebGpuViewer(
         // keeps animating independently via its own already-running frame loop - no copying of
         // animation state needed. The other slot is simply null when there's no partner (yet).
         val spread = ImagePage.ImageSpread(left, right)
+        // Fit height and original size apply to a spread too; a new one is built as its sides
+        // decode, so this follows their size.
+        applyFitModeAnchor(spread)
         page.spreadPage = spread
         return spread
     }
@@ -976,15 +1020,28 @@ open class WebGpuViewer(
                 }
             }
 
-            onLongTap = { _ ->
-                if (activity.viewModel.state.value.menuVisible || config.longTapEnabled) {
-                    (currentPage as? ViewerReaderPage)?.let { activity.onPageLongTap(it.page) }
+            onLongTap = { offset ->
+                fun pageMenu() {
+                    if (activity.viewModel.state.value.menuVisible || config.longTapEnabled) {
+                        (currentPage as? ViewerReaderPage)?.let { activity.onPageLongTap(it.page) }
+                    }
+                }
+                if (config.bubbleZoomGesture == ReaderPreferences.BubbleZoomGesture.LONG_PRESS) {
+                    // A bubble under the finger opens; anything else is the menu as before.
+                    this@WebGpuViewer.scope.launch { if (!pager.state.showBubble(offset)) pageMenu() }
+                } else {
+                    pageMenu()
                 }
             }
         }
 
-        pager.state.bubbleZoomEnabled = config.bubbleZoom
-        config.bubbleZoomChangedListener = { pager.state.bubbleZoomEnabled = it }
+        fun applyBubbleZoom() {
+            pager.state.bubbleZoomEnabled = config.bubbleZoom
+            pager.state.bubbleZoomOnDoubleTap =
+                config.bubbleZoomGesture == ReaderPreferences.BubbleZoomGesture.DOUBLE_TAP
+        }
+        applyBubbleZoom()
+        config.bubbleZoomChangedListener = ::applyBubbleZoom
 
         fun applyDoubleTap() {
             pager.state.doubleTapZoomEnabled = config.doubleTapZoom
@@ -1099,6 +1156,7 @@ open class WebGpuViewer(
             deferredCleanup.forEach { it.cleanup() }
             deferredCleanup.clear()
             loneIndices.clear()
+            shiftedChapters.clear()
             chapterPreloadsInFlight.clear()
             lock.notifyAll()
         }

@@ -73,7 +73,11 @@ class WebGpuConfig(
     var bubbleZoom = true
         private set
 
-    var bubbleZoomChangedListener: ((Boolean) -> Unit)? = null
+    var bubbleZoomGesture = ReaderPreferences.BubbleZoomGesture.DOUBLE_TAP
+        private set
+
+    /** Either bubble zoom setting changed. */
+    var bubbleZoomChangedListener: (() -> Unit)? = null
 
     var doubleTapZoom = true
         private set
@@ -178,7 +182,11 @@ class WebGpuConfig(
 
         readerPreferences.bubbleZoom.register(
             { bubbleZoom = it },
-            { bubbleZoomChangedListener?.invoke(it) },
+            { bubbleZoomChangedListener?.invoke() },
+        )
+        readerPreferences.bubbleZoomGesture.register(
+            { bubbleZoomGesture = it },
+            { bubbleZoomChangedListener?.invoke() },
         )
 
         (if (continuous) readerPreferences.webtoonDoubleTapZoomEnabled else readerPreferences.pagerDoubleTapZoomEnabled)

@@ -106,6 +106,8 @@ jobs:
 
             No analytics, no crash reporting. Built by GitHub Actions from this tag; checksums are in `SHA256SUMS.txt`.
 
+            **Found a bug?** Please [open an issue](https://github.com/GarrettKK/Foldchiyomi/issues/new/choose) rather than a Reddit comment, with your device, the app version and a screenshot. Comments get lost; issues get fixed.
+
             <!-->
           files: |
             Foldchiyomi-*.apk

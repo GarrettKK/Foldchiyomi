@@ -204,6 +204,7 @@ internal object BubbleZoom {
         tapY: Float,
     ): BubbleOverlay? {
         var hit: Pair<Image, FloatArray>? = null
+        var openEdge = NO_EDGE
         page.forEachImage { image, offsetX, imageScale ->
             if (hit != null) return@forEachImage
             // As ImageSingle.forEachPlacedImage, at the page's own transform.
@@ -215,6 +216,9 @@ internal object BubbleZoom {
             )
             if (tapX >= rect[0] && tapX < rect[2] && tapY >= rect[1] && tapY < rect[3]) {
                 hit = image to rect
+                // In a spread, a bubble cut by the seam is still a bubble: the side's inner edge
+                // bounds it instead of disqualifying it.
+                if (page is ImagePage.ImageSpread) openEdge = if (offsetX < 0f) RIGHT_EDGE else LEFT_EDGE
             }
         }
         val (image, imageRect) = hit ?: return null
@@ -226,6 +230,7 @@ internal object BubbleZoom {
             map,
             (u * map.width).toInt().coerceIn(0, map.width - 1),
             (v * map.height).toInt().coerceIn(0, map.height - 1),
+            openEdge,
         ) ?: return null
 
         // Map pixels to screen.
@@ -265,13 +270,18 @@ internal object BubbleZoom {
     /** A bubble found on an [InkMap]: its bounds there, and its shape within them. */
     class Found(val x0: Int, val y0: Int, val width: Int, val height: Int, val mask: ByteArray)
 
+    /** Which side of the map, if any, a bubble may run off - the seam side of a spread's page. */
+    private const val NO_EDGE = 0
+    private const val LEFT_EDGE = 1
+    private const val RIGHT_EDGE = 2
+
     /**
      * The speech bubble around map pixel ([x], [y]): the bright paper there, flood-filled up to the
      * dark outline that closes it, its lettering filled in, its outline added back. Null for
      * anything that doesn't look like a bubble - open to the page's edge, too big, too thin, or
      * with nothing written in it.
      */
-    fun find(map: InkMap, x: Int, y: Int): Found? {
+    fun find(map: InkMap, x: Int, y: Int, openEdge: Int = NO_EDGE): Found? {
         val w = map.width
         val h = map.height
 
@@ -311,14 +321,18 @@ internal object BubbleZoom {
             val i = queue[head++]
             val px = i % w
             val py = i / w
-            // Open to the page's edge: a gutter or a borderless panel, not a bubble.
-            if (px == 0 || py == 0 || px == w - 1 || py == h - 1) return null
+            // Open to the page's edge: a gutter or a borderless panel, not a bubble - except at
+            // the open edge, which simply bounds it.
+            val atLeft = px == 0
+            val atRight = px == w - 1
+            if (py == 0 || py == h - 1) return null
+            if ((atLeft && openEdge != LEFT_EDGE) || (atRight && openEdge != RIGHT_EDGE)) return null
             if (px < x0) x0 = px
             if (px > x1) x1 = px
             if (py < y0) y0 = py
             if (py > y1) y1 = py
-            for (n in intArrayOf(i - 1, i + 1, i - w, i + w)) {
-                if (inside[n] || (map.luma[n].toInt() and 0xFF) < paper) continue
+            for (n in intArrayOf(if (atLeft) -1 else i - 1, if (atRight) -1 else i + 1, i - w, i + w)) {
+                if (n < 0 || inside[n] || (map.luma[n].toInt() and 0xFF) < paper) continue
                 if (tail >= maxArea) return null
                 inside[n] = true
                 queue[tail++] = n

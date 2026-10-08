@@ -229,6 +229,12 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
     /** Whether a double tap on a speech bubble opens it enlarged - see [showBubble]. */
     var bubbleZoomEnabled: Boolean = true
 
+    /**
+     * Whether the double tap itself looks for a bubble before zooming. Off, the reader opens
+     * bubbles some other way - by calling [showBubble] from its own gesture.
+     */
+    var bubbleZoomOnDoubleTap: Boolean = true
+
     /** The speech bubble open over the page, if any - see [BubbleZoom]. */
     @Volatile
     internal var bubble: BubbleOverlay? = null
@@ -294,13 +300,18 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
     private fun animateBubble(target: BubbleOverlay, to: Float, then: () -> Unit = {}) {
         bubbleJob?.cancel()
         bubbleJob = scope?.launch {
-            Animatable(target.progress).animateTo(
-                to, animationSpec = spring(
-                    dampingRatio = if (to > 0f) 0.78f else 1f,
-                    stiffness = Spring.StiffnessMediumLow,
+            // Paced like the double tap zoom; at its normal setting a quick spring with a
+            // little overshoot on the way out.
+            val spec: AnimationSpec<Float> = when {
+                doubleTapZoomMillis <= 1 -> snap()
+                doubleTapZoomMillis < 500 -> tween(doubleTapZoomMillis, easing = FastOutSlowInEasing)
+                else -> spring(
+                    dampingRatio = if (to > 0f) 0.8f else 1f,
+                    stiffness = 900f,
                     visibilityThreshold = 0.002f,
                 )
-            ) {
+            }
+            Animatable(target.progress).animateTo(to, animationSpec = spec) {
                 target.progress = value
                 invalidate()
             }
