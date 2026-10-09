@@ -366,7 +366,11 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         val centerY = (rect[1] + rect[3]) * 0.5f
         val targetX = (page.x - (centerX - 0.5f) / page.scale).coerceIn(page.minX(targetScale), page.maxX(targetScale))
         val targetY = (page.y - (centerY - 0.5f) / page.scale).coerceIn(page.minY(targetScale), page.maxY(targetScale))
-        page.animateTo(targetX = targetX, targetY = targetY, targetScale = targetScale)
+        // Paced like the double tap zoom it stands in for, so zooming in and back out match.
+        page.animateTo(
+            targetX = targetX, targetY = targetY, targetScale = targetScale,
+            animationSpec = doubleTapZoomSpec(),
+        )
         return true
     }
 
