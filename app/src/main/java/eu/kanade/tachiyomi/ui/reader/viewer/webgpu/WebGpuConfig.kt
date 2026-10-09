@@ -76,6 +76,9 @@ class WebGpuConfig(
     var bubbleZoomGesture = ReaderPreferences.BubbleZoomGesture.DOUBLE_TAP
         private set
 
+    var panelZoom = false
+        private set
+
     /** Either bubble zoom setting changed. */
     var bubbleZoomChangedListener: (() -> Unit)? = null
 
@@ -186,6 +189,10 @@ class WebGpuConfig(
         )
         readerPreferences.bubbleZoomGesture.register(
             { bubbleZoomGesture = it },
+            { bubbleZoomChangedListener?.invoke() },
+        )
+        readerPreferences.panelZoom.register(
+            { panelZoom = it },
             { bubbleZoomChangedListener?.invoke() },
         )
 

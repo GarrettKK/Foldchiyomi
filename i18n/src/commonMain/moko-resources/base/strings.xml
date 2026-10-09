@@ -484,6 +484,8 @@
     <string name="pref_navigate_pan">Pan wide images</string>
     <string name="pref_bubble_zoom">Bubble zoom</string>
     <string name="pref_bubble_zoom_gesture">Bubble zoom gesture</string>
+    <string name="pref_panel_zoom">Zoom to panel</string>
+    <string name="pref_panel_zoom_summary">The bubble gesture on artwork zooms to the panel under it. Where no panel is found, it zooms in as usual</string>
     <string name="bubble_zoom_gesture_double_tap">Double tap</string>
     <string name="bubble_zoom_gesture_long_press">Long press</string>
     <string name="action_shift_spread">Shift spread pages</string>

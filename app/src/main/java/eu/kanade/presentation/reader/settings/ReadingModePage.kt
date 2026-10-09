@@ -340,9 +340,26 @@ private fun ColumnScope.WebGpuViewerSettings(viewModel: ReaderSettingsViewModel)
             pref = viewModel.preferences.cropBordersWebtoon,
         )
     } else {
+        val bubbleZoom by viewModel.preferences.bubbleZoom.collectAsState()
         CheckboxItem(
             label = stringResource(MR.strings.pref_bubble_zoom),
             pref = viewModel.preferences.bubbleZoom,
+        )
+        if (bubbleZoom) {
+            val gesture by viewModel.preferences.bubbleZoomGesture.collectAsState()
+            SettingsChipRow(MR.strings.pref_bubble_zoom_gesture) {
+                ReaderPreferences.BubbleZoomGesture.entries.forEach {
+                    FilterChip(
+                        selected = it == gesture,
+                        onClick = { viewModel.preferences.bubbleZoomGesture.set(it) },
+                        label = { Text(stringResource(it.titleRes)) },
+                    )
+                }
+            }
+        }
+        CheckboxItem(
+            label = stringResource(MR.strings.pref_panel_zoom),
+            pref = viewModel.preferences.panelZoom,
         )
     }
 
