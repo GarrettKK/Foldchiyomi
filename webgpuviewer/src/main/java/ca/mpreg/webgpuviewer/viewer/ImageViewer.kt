@@ -139,6 +139,15 @@ fun ImageViewer(
                     scope.launch {
                         delay(viewConfiguration.longPressTimeoutMillis.milliseconds)
                         longPressed = true
+                        // A held finger jitters a pixel or two. At home scale the page can't
+                        // pan, so that went into a page turn a hair wide - under the slop, so
+                        // the press still counts, but enough to stop a bubble opening and to
+                        // leave the page a hair turned. The press owns the gesture now: undo it.
+                        if (state.pageOffset != 0f) {
+                            state.pageOffset = 0f
+                            state.turnHeld = false
+                            state.invalidate()
+                        }
                         state.onLongTap?.invoke(
                             Offset(
                                 firstDown.position.x / state.width,
@@ -351,6 +360,12 @@ fun ImageViewer(
                         do {
                             val event = awaitPointerEvent(pass = PointerEventPass.Initial)
                             canceled = event.changes.any { it.isConsumed }
+                            if (longPressed) {
+                                // The long press took the gesture - see longPressJob: what the
+                                // finger does until it lifts is neither a pan nor a page turn.
+                                event.changes.fastForEach { it.consume() }
+                                continue
+                            }
                             if (canceled) {
                                 longPressJob?.cancel()
                             } else {

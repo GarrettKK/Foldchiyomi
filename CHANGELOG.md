@@ -10,6 +10,11 @@ All notable changes to Foldchiyomi are documented here. For the changes it inher
 ### Improved
 - **Tap another bubble while one is open** and it opens in its place. A tap on the open bubble, or anywhere else, closes it as before.
 
+### Fixed
+- **Bubble zoom by long press opened the page menu instead.** A held finger jitters a pixel or two, which started a page turn a hair wide; that stopped the bubble opening. The press now takes the gesture and undoes the jitter.
+- Zooming to a panel is paced like the double tap zoom, so the way in and the way out match at every animation speed setting.
+- The bubble zoom gesture can be picked in the reader's own settings sheet too.
+
 ## [v1.5.0] - 2026-10-08
 
 ### Added
