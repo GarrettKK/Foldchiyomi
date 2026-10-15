@@ -203,25 +203,16 @@ internal object BubbleZoom {
         tapX: Float,
         tapY: Float,
     ): BubbleOverlay? {
-        var hit: Pair<Image, FloatArray>? = null
-        var openEdge = NO_EDGE
-        page.forEachImage { image, offsetX, imageScale ->
-            if (hit != null) return@forEachImage
-            // As ImageSingle.forEachPlacedImage, at the page's own transform.
-            val placeX = (page.x + offsetX / screenWidth + WebGpuRenderer.offsetX) / imageScale -
-                    WebGpuRenderer.offsetX
-            val placeY = (page.y + WebGpuRenderer.offsetY) / imageScale - WebGpuRenderer.offsetY
-            val rect = image.placement(
-                screenWidth, screenHeight, placeX, placeY, page.scale * imageScale
-            )
-            if (tapX >= rect[0] && tapX < rect[2] && tapY >= rect[1] && tapY < rect[3]) {
-                hit = image to rect
-                // In a spread, a bubble cut by the seam is still a bubble: the side's inner edge
-                // bounds it instead of disqualifying it.
-                if (page is ImagePage.ImageSpread) openEdge = if (offsetX < 0f) RIGHT_EDGE else LEFT_EDGE
-            }
+        val hit = imageAt(page, screenWidth, screenHeight, tapX, tapY) ?: return null
+        val image = hit.image
+        val imageRect = hit.rect
+        // In a spread, a bubble cut by the seam is still a bubble: the side's inner edge bounds
+        // it instead of disqualifying it.
+        val openEdge = when {
+            page !is ImagePage.ImageSpread -> NO_EDGE
+            hit.offsetX < 0f -> RIGHT_EDGE
+            else -> LEFT_EDGE
         }
-        val (image, imageRect) = hit ?: return null
         val map = image.inkMap ?: return null
 
         val u = (tapX - imageRect[0]) / (imageRect[2] - imageRect[0])
@@ -265,6 +256,37 @@ internal object BubbleZoom {
             targetY = settle((rect[1] + rect[3]) * 0.5f, zoom * (rect[3] - rect[1]) * 0.5f, 0.05f),
             zoom = zoom,
         )
+    }
+
+    /** One of [page]'s images and where it sits on screen - see [imageAt]. */
+    class Hit(val image: Image, val rect: FloatArray, val offsetX: Float)
+
+    /**
+     * The image of [page] under the tap at ([tapX], [tapY]), normalised screen coordinates on a
+     * [screenWidth] x [screenHeight] surface, with its placement there; null off every image.
+     */
+    fun imageAt(
+        page: ImagePage.ImageSingle,
+        screenWidth: Int,
+        screenHeight: Int,
+        tapX: Float,
+        tapY: Float,
+    ): Hit? {
+        var hit: Hit? = null
+        page.forEachImage { image, offsetX, imageScale ->
+            if (hit != null) return@forEachImage
+            // As ImageSingle.forEachPlacedImage, at the page's own transform.
+            val placeX = (page.x + offsetX / screenWidth + WebGpuRenderer.offsetX) / imageScale -
+                    WebGpuRenderer.offsetX
+            val placeY = (page.y + WebGpuRenderer.offsetY) / imageScale - WebGpuRenderer.offsetY
+            val rect = image.placement(
+                screenWidth, screenHeight, placeX, placeY, page.scale * imageScale
+            )
+            if (tapX >= rect[0] && tapX < rect[2] && tapY >= rect[1] && tapY < rect[3]) {
+                hit = Hit(image, rect, offsetX)
+            }
+        }
+        return hit
     }
 
     /** A bubble found on an [InkMap]: its bounds there, and its shape within them. */

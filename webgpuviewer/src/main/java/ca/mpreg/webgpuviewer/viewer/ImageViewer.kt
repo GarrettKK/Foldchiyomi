@@ -96,7 +96,8 @@ fun ImageViewer(
                 // An open speech bubble takes the next touch - and the rest of a double tap - to
                 // close, and nothing else: no page turn, menu or zoom from the same tap.
                 if (state.bubbleShown) {
-                    state.dismissBubble()
+                    val tap = Offset(firstDown.position.x / state.width, firstDown.position.y / state.height)
+                    scope.launch { state.tapOnBubble(tap) }
                     view.parent?.requestDisallowInterceptTouchEvent(true)
                     firstDown.consume()
                     do {
@@ -138,6 +139,15 @@ fun ImageViewer(
                     scope.launch {
                         delay(viewConfiguration.longPressTimeoutMillis.milliseconds)
                         longPressed = true
+                        // A held finger jitters a pixel or two. At home scale the page can't
+                        // pan, so that went into a page turn a hair wide - under the slop, so
+                        // the press still counts, but enough to stop a bubble opening and to
+                        // leave the page a hair turned. The press owns the gesture now: undo it.
+                        if (state.pageOffset != 0f) {
+                            state.pageOffset = 0f
+                            state.turnHeld = false
+                            state.invalidate()
+                        }
                         state.onLongTap?.invoke(
                             Offset(
                                 firstDown.position.x / state.width,
@@ -194,6 +204,8 @@ fun ImageViewer(
                             }
                             if (!state.doubleTapZoomEnabled) return@launch
                             if (zoomPage.atHomeScale) {
+                                // On a panel, frame it - see PanelZoom - else zoom in a step.
+                                if (state.zoomToPanel(Offset(tapX, tapY))) return@launch
                                 zoomPage.animateTo(
                                     Offset(tapX, tapY), targetScale = zoomPage.doubleTapScale,
                                     animationSpec = state.doubleTapZoomSpec(),
@@ -348,6 +360,12 @@ fun ImageViewer(
                         do {
                             val event = awaitPointerEvent(pass = PointerEventPass.Initial)
                             canceled = event.changes.any { it.isConsumed }
+                            if (longPressed) {
+                                // The long press took the gesture - see longPressJob: what the
+                                // finger does until it lifts is neither a pan nor a page turn.
+                                event.changes.fastForEach { it.consume() }
+                                continue
+                            }
                             if (canceled) {
                                 longPressJob?.cancel()
                             } else {

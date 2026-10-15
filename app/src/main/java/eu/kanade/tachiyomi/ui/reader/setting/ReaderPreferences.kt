@@ -221,6 +221,9 @@ class ReaderPreferences(
     /** Double-tap a speech bubble to open it enlarged over the page. */
     val bubbleZoom: Preference<Boolean> = preferenceStore.getBoolean("webgpu_bubble_zoom", true)
 
+    /** The bubble gesture on artwork zooms to the panel under it rather than in by a step. */
+    val panelZoom: Preference<Boolean> = preferenceStore.getBoolean("webgpu_panel_zoom", false)
+
     /** Which gesture opens a bubble. */
     val bubbleZoomGesture: Preference<BubbleZoomGesture> =
         preferenceStore.getEnum("webgpu_bubble_zoom_gesture", BubbleZoomGesture.DOUBLE_TAP)

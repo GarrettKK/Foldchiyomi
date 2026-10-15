@@ -42,6 +42,8 @@ import ca.mpreg.webgpuviewer.renderer.endAndRelease
 import ca.mpreg.webgpuviewer.transition.Transition
 import ca.mpreg.webgpuviewer.transition.TransitionBasic
 import ca.mpreg.webgpuviewer.transition.TurnGesture
+import kotlin.math.abs
+import kotlin.math.min
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -235,6 +237,12 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
      */
     var bubbleZoomOnDoubleTap: Boolean = true
 
+    /**
+     * Whether a double tap on artwork zooms to the panel under it - see [zoomToPanel] - rather
+     * than zooming in by a fixed step.
+     */
+    var panelZoomEnabled: Boolean = false
+
     /** The speech bubble open over the page, if any - see [BubbleZoom]. */
     @Volatile
     internal var bubble: BubbleOverlay? = null
@@ -274,6 +282,95 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
             Log.w("ImageViewerState", "Bubble preparation failed", it)
         }
         if (bubble === found) animateBubble(found, 1f)
+        return true
+    }
+
+    /**
+     * A tap while a bubble is open. On the bubble itself, or where no other bubble lies, it
+     * closes; on another bubble, that one opens in its place, so reading on needs one tap per
+     * bubble rather than a close and a double tap.
+     */
+    suspend fun tapOnBubble(tap: Offset) {
+        val current = bubble ?: return
+        val halfWidth = (current.rect[2] - current.rect[0]) * current.zoom * 0.5f
+        val halfHeight = (current.rect[3] - current.rect[1]) * current.zoom * 0.5f
+        val onBubble = abs(tap.x - current.targetX) <= halfWidth && abs(tap.y - current.targetY) <= halfHeight
+        if (onBubble || current.progress < 1f) {
+            dismissBubble()
+            return
+        }
+        val page = current.page
+        val w = width
+        val h = height
+        val found = if (w > 0 && h > 0) {
+            withContext(Dispatchers.Default) {
+                runCatching { BubbleZoom.detect(page, w, h, tap.x, tap.y) }
+                    .onFailure { Log.w("ImageViewerState", "Bubble detection failed", it) }
+                    .getOrNull()
+            }
+        } else {
+            null
+        }
+        if (bubble !== current) return
+        if (found == null || found.rect.contentEquals(current.rect) || getPage(0) !== page || pageOffset != 0f) {
+            dismissBubble()
+            return
+        }
+        // The open one drops back quickly, then the next rises as a fresh one would.
+        bubbleJob?.cancel()
+        Animatable(current.progress).animateTo(0f, animationSpec = tween(120, easing = FastOutSlowInEasing)) {
+            current.progress = value
+            invalidate()
+        }
+        if (bubble !== current) return
+        bubble = found
+        releaseBubble(current)
+        runCatching {
+            WebGpuRenderer.withContext { BubbleZoom.prepare(found, w, h) }
+            BubbleZoom.awaitPrepared()
+        }.onFailure {
+            if (it is CancellationException) throw it
+            Log.w("ImageViewerState", "Bubble preparation failed", it)
+        }
+        if (bubble === found) animateBubble(found, 1f)
+    }
+
+    /**
+     * Zooms the page to frame the panel under [tap] (normalised screen coordinates), where
+     * [panelZoomEnabled] and the page is at rest with a panel there - see [PanelZoom]. False
+     * otherwise, so the caller can zoom as usual instead.
+     */
+    suspend fun zoomToPanel(tap: Offset): Boolean {
+        if (!panelZoomEnabled || pageOffset != 0f || bubble != null) return false
+        val page = getPage(0) as? ImagePage.ImageSingle ?: return false
+        if (!page.atHomeScale) return false
+        val w = width
+        val h = height
+        if (w <= 0 || h <= 0) return false
+        val rect = withContext(Dispatchers.Default) {
+            runCatching { PanelZoom.detect(page, w, h, tap.x, tap.y) }
+                .onFailure { Log.w("ImageViewerState", "Panel detection failed", it) }
+                .getOrNull()
+        } ?: return false
+        if (getPage(0) !== page || pageOffset != 0f || !page.atHomeScale) return false
+
+        // Scaled to fit with a little room, about the screen's centre, then moved so the panel's
+        // centre lands there: on screen a page point sits at 0.5 + scale * (page.x + k) for a k
+        // of its own, so a point now at c moves to the centre when page.x drops by (c - 0.5) / scale.
+        val panelWidth = (rect[2] - rect[0]) * w
+        val panelHeight = (rect[3] - rect[1]) * h
+        if (panelWidth <= 0f || panelHeight <= 0f) return false
+        val fit = min(w / panelWidth, viewportHeight / panelHeight) * PANEL_FRAME
+        val targetScale = (page.scale * fit).coerceIn(page.minScale, page.maxScale)
+        val centerX = (rect[0] + rect[2]) * 0.5f
+        val centerY = (rect[1] + rect[3]) * 0.5f
+        val targetX = (page.x - (centerX - 0.5f) / page.scale).coerceIn(page.minX(targetScale), page.maxX(targetScale))
+        val targetY = (page.y - (centerY - 0.5f) / page.scale).coerceIn(page.minY(targetScale), page.maxY(targetScale))
+        // Paced like the double tap zoom it stands in for, so zooming in and back out match.
+        page.animateTo(
+            targetX = targetX, targetY = targetY, targetScale = targetScale,
+            animationSpec = doubleTapZoomSpec(),
+        )
         return true
     }
 
@@ -486,6 +583,9 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
 
     private companion object {
         const val MAX_RETRIES = 10
+
+        /** How much of the screen a framed panel takes across or down. */
+        const val PANEL_FRAME = 0.94f
     }
 
     private class RenderSnapshot(
