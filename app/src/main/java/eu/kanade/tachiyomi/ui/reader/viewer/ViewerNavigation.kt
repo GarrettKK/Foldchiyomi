@@ -16,6 +16,9 @@ abstract class ViewerNavigation {
         data object NEXT : NavigationRegion(MR.strings.nav_zone_next, Color.argb(0xCC, 0x84, 0xE2, 0x96))
         data object LEFT : NavigationRegion(MR.strings.nav_zone_left, Color.argb(0xCC, 0x7D, 0x11, 0x28))
         data object RIGHT : NavigationRegion(MR.strings.nav_zone_right, Color.argb(0xCC, 0xA6, 0xCF, 0xD5))
+
+        /** A tap does nothing here - for a layout that leaves the page to other gestures. */
+        data object NONE : NavigationRegion(MR.strings.nav_zone_none, Color.argb(0x66, 0x80, 0x80, 0x80))
     }
 
     data class Region(

@@ -326,6 +326,7 @@ class ReaderPreferences(
             MR.strings.edge_nav,
             MR.strings.right_and_left_nav,
             MR.strings.disabled_nav,
+            MR.strings.bottom_menu_nav,
         )
 
         val ImageScaleType = listOf(

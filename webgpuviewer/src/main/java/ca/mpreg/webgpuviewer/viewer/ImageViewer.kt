@@ -96,14 +96,24 @@ fun ImageViewer(
                 // An open speech bubble takes the next touch - and the rest of a double tap - to
                 // close, and nothing else: no page turn, menu or zoom from the same tap.
                 if (state.bubbleShown) {
-                    val tap = Offset(firstDown.position.x / state.width, firstDown.position.y / state.height)
-                    scope.launch { state.tapOnBubble(tap) }
                     view.parent?.requestDisallowInterceptTouchEvent(true)
                     firstDown.consume()
+                    var last = firstDown.position
                     do {
                         val event = awaitPointerEvent(pass = PointerEventPass.Initial)
                         event.changes.fastForEach { it.consume() }
+                        event.changes.firstOrNull { it.id == firstDown.id }?.let { last = it.position }
                     } while (event.changes.any { it.pressed })
+                    // A swipe up or down steps to the next or previous bubble; a tap closes it
+                    // or opens the one tapped - see ImageViewerState.
+                    val dx = last.x - firstDown.position.x
+                    val dy = last.y - firstDown.position.y
+                    if (abs(dy) > 3 * touchSlop && abs(dy) > abs(dx)) {
+                        scope.launch { state.stepBubble(if (dy < 0f) 1 else -1) }
+                    } else if (abs(dx) <= touchSlop && abs(dy) <= touchSlop) {
+                        val tap = Offset(firstDown.position.x / state.width, firstDown.position.y / state.height)
+                        scope.launch { state.tapOnBubble(tap) }
+                    }
                     val again = waitForDown(doubleTapTimeout) ?: return@awaitEachGesture
                     again.consume()
                     do {

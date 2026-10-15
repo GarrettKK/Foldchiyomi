@@ -1017,6 +1017,7 @@ open class WebGpuViewer(
                     NavigationRegion.PREV -> if (isReversed) moveToNext() else moveToPrevious()
                     NavigationRegion.RIGHT -> moveRight()
                     NavigationRegion.LEFT -> moveLeft()
+                    NavigationRegion.NONE -> {}
                 }
             }
 

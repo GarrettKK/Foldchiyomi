@@ -1,6 +1,7 @@
 package ca.mpreg.webgpuviewer.viewer
 
 import ca.mpreg.webgpuviewer.renderer.InkMap
+import kotlin.math.max
 
 /**
  * Finds the comic panel under a tap, for [ImageViewerState.zoomToPanel]: the page zooms to
@@ -26,6 +27,15 @@ internal object PanelZoom {
 
     /** Added around the panel's bounds, as a share of the page's side, to keep its border line. */
     private const val MARGIN = 0.012f
+
+    /** How deep [panelOrder]'s cuts go - enough for any real layout. */
+    private const val MAX_CUT_DEPTH = 6
+
+    /** A gutter at least this share of the piece's side across splits it - a speck doesn't. */
+    private const val MIN_GAP = 0.004f
+
+    /** A line is a gutter when at least this share of it is paper - art may touch it. */
+    private const val CLEAR_LINE = 0.97f
 
     /**
      * The panel under the tap at ([tapX], [tapY]) - normalised screen coordinates on a
@@ -59,14 +69,12 @@ internal object PanelZoom {
         )
     }
 
-    /** The panel around map pixel ([x], [y]): its bounds (x0, y0, x1, y1), x1 and y1 exclusive. */
-    fun find(map: InkMap, x: Int, y: Int): IntArray? {
+    /** The gutters of [map]: paper reachable from the page's edges, one flag per map pixel. */
+    private fun gutters(map: InkMap): BooleanArray {
         val w = map.width
         val h = map.height
         val luma = map.luma
         fun paper(i: Int) = (luma[i].toInt() and 0xFF) >= PAPER
-
-        // The gutters: paper reachable from the page's edges.
         val gutter = BooleanArray(w * h)
         val queue = IntArray(w * h)
         var head = 0
@@ -94,6 +102,100 @@ internal object PanelZoom {
             if (py > 0) reach(i - w)
             if (py < h - 1) reach(i + w)
         }
+        return gutter
+    }
+
+    /**
+     * The page cut into panels in reading order, as rectangles (x0, y0, x1, y1; x1 and y1
+     * exclusive) that between them cover the whole map. An XY-cut: the page is split along
+     * every gutter that crosses it top to bottom or side to side, each piece is split again
+     * the other way, and so on until nothing crosses. Bands read top to bottom; pieces across
+     * a band read right to left where [rightToLeft], else left to right. A page with no
+     * crossing gutter is one piece.
+     */
+    fun panelOrder(map: InkMap, rightToLeft: Boolean): List<IntArray> {
+        val gutter = gutters(map)
+        val out = ArrayList<IntArray>()
+        cut(gutter, map.width, 0, 0, map.width, map.height, horizontal = true, depth = 0, rightToLeft, out)
+        return out
+    }
+
+    private fun cut(
+        gutter: BooleanArray, w: Int, x0: Int, y0: Int, x1: Int, y1: Int,
+        horizontal: Boolean, depth: Int, rightToLeft: Boolean, out: MutableList<IntArray>,
+    ) {
+        if (depth < MAX_CUT_DEPTH) {
+            var bands = split(gutter, w, x0, y0, x1, y1, horizontal)
+            var axisHorizontal = horizontal
+            if (bands.size <= 1) {
+                bands = split(gutter, w, x0, y0, x1, y1, !horizontal)
+                axisHorizontal = !horizontal
+            }
+            if (bands.size > 1) {
+                if (!axisHorizontal && rightToLeft) bands = bands.reversed()
+                for ((a, b) in bands) {
+                    if (axisHorizontal) {
+                        cut(gutter, w, x0, a, x1, b, horizontal = false, depth + 1, rightToLeft, out)
+                    } else {
+                        cut(gutter, w, a, y0, b, y1, horizontal = true, depth + 1, rightToLeft, out)
+                    }
+                }
+                return
+            }
+        }
+        out += intArrayOf(x0, y0, x1, y1)
+    }
+
+    /**
+     * The spans along one axis between the gutters crossing the rectangle the other way, in
+     * order along the axis and covering it end to end - rows for [horizontal], else columns.
+     */
+    private fun split(
+        gutter: BooleanArray, w: Int, x0: Int, y0: Int, x1: Int, y1: Int, horizontal: Boolean
+    ): List<Pair<Int, Int>> {
+        val from = if (horizontal) y0 else x0
+        val to = if (horizontal) y1 else x1
+        val across = if (horizontal) x1 - x0 else y1 - y0
+        val minGap = max(2, ((if (horizontal) y1 - y0 else x1 - x0) * MIN_GAP).toInt())
+        // Where a line across the rectangle is (nearly) all gutter.
+        fun clear(at: Int): Boolean {
+            var gutterCount = 0
+            if (horizontal) {
+                for (px in x0 until x1) if (gutter[at * w + px]) gutterCount++
+            } else {
+                for (py in y0 until y1) if (gutter[py * w + at]) gutterCount++
+            }
+            return gutterCount >= CLEAR_LINE * across
+        }
+        val gaps = ArrayList<Pair<Int, Int>>()
+        var at = from
+        while (at < to) {
+            if (!clear(at)) {
+                at++
+                continue
+            }
+            val gapStart = at
+            while (at < to && clear(at)) at++
+            // A margin at either end splits nothing.
+            if (at - gapStart >= minGap && gapStart > from && at < to) gaps += gapStart to at
+        }
+        if (gaps.isEmpty()) return listOf(from to to)
+        val bands = ArrayList<Pair<Int, Int>>()
+        var start = from
+        for ((a, b) in gaps) {
+            val mid = (a + b) / 2
+            bands += start to mid
+            start = mid
+        }
+        bands += start to to
+        return bands
+    }
+
+    /** The panel around map pixel ([x], [y]): its bounds (x0, y0, x1, y1), x1 and y1 exclusive. */
+    fun find(map: InkMap, x: Int, y: Int): IntArray? {
+        val w = map.width
+        val h = map.height
+        val gutter = gutters(map)
 
         // On the gutter, or on white open to it - a borderless panel - there is nothing to frame.
         val start = y * w + x
@@ -101,8 +203,9 @@ internal object PanelZoom {
 
         // The panel: what the tap's pixel reaches without crossing gutter.
         val inside = BooleanArray(w * h)
-        head = 0
-        tail = 0
+        val queue = IntArray(w * h)
+        var head = 0
+        var tail = 0
         inside[start] = true
         queue[tail++] = start
         var x0 = x
