@@ -9,6 +9,7 @@ All notable changes to Foldchiyomi are documented here. For the changes it inher
 
 ### Improved
 - **Tap another bubble while one is open** and it opens in its place. A tap on the open bubble, or anywhere else, closes it as before.
+- **The icon's colours are inverted:** a light book on navy, rather than navy on paper.
 
 ### Fixed
 - **Bubble zoom by long press opened the page menu instead.** A held finger jitters a pixel or two, which started a page turn a hair wide; that stopped the bubble opening. The press now takes the gesture and undoes the jitter.
