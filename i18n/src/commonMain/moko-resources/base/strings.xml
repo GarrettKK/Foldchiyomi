@@ -463,8 +463,10 @@
     <string name="edge_nav">Edge</string>
     <string name="right_and_left_nav">Right and Left</string>
     <string name="disabled_nav">Disabled</string>
+    <string name="bottom_menu_nav">Bottom edge menu</string>
     <string name="nav_zone_prev">Prev</string>
     <string name="nav_zone_next">Next</string>
+    <string name="nav_zone_none">Nothing</string>
     <string name="nav_zone_left">Left</string>
     <string name="nav_zone_right">Right</string>
     <string name="left_to_right_viewer">Left to right (Comics)</string>

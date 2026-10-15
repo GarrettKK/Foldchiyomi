@@ -43,6 +43,7 @@ import ca.mpreg.webgpuviewer.transition.Transition
 import ca.mpreg.webgpuviewer.transition.TransitionBasic
 import ca.mpreg.webgpuviewer.transition.TurnGesture
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -316,6 +317,71 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
             dismissBubble()
             return
         }
+        switchBubble(current, found)
+    }
+
+    /** The page's bubbles in reading order, found once per page - see [stepBubble]. */
+    private var sequence: List<BubbleOverlay>? = null
+    private var sequencePage: ImagePage? = null
+
+    private suspend fun sequenceFor(page: ImagePage.ImageSingle): List<BubbleOverlay> {
+        sequence?.takeIf { sequencePage === page }?.let { return it }
+        val w = width
+        val h = height
+        val found = if (w > 0 && h > 0) {
+            withContext(Dispatchers.Default) {
+                runCatching { BubbleZoom.detectAll(page, w, h, isReversed) }
+                    .onFailure { Log.w("ImageViewerState", "Bubble sequence failed", it) }
+                    .getOrDefault(emptyList())
+            }
+        } else {
+            emptyList()
+        }
+        sequence = found
+        sequencePage = page
+        return found
+    }
+
+    /**
+     * Opens the bubble [delta] places on from the open one in reading order - the next for 1,
+     * the previous for -1 - and closes it past either end. The order comes from the page's
+     * panels, so it can be wrong on an unusual layout; a tap on any bubble puts it right.
+     */
+    suspend fun stepBubble(delta: Int) {
+        val current = bubble ?: return
+        if (current.progress < 1f) return
+        val page = current.page
+        val all = sequenceFor(page)
+        if (bubble !== current) return
+        if (all.isEmpty() || getPage(0) !== page || pageOffset != 0f) {
+            dismissBubble()
+            return
+        }
+        // The open bubble may have been found by a tap rather than from the sequence: its
+        // place is the sequence bubble it overlaps most, or the nearest to it.
+        fun overlap(a: FloatArray, b: FloatArray): Float {
+            val ix = (min(a[2], b[2]) - max(a[0], b[0])).coerceAtLeast(0f)
+            val iy = (min(a[3], b[3]) - max(a[1], b[1])).coerceAtLeast(0f)
+            return ix * iy
+        }
+        var at = all.indices.maxByOrNull { overlap(all[it].rect, current.rect) } ?: 0
+        if (overlap(all[at].rect, current.rect) <= 0f) {
+            at = all.indices.minByOrNull {
+                abs(all[it].centerX - current.centerX) + abs(all[it].centerY - current.centerY)
+            } ?: 0
+        }
+        val target = at + delta
+        if (target !in all.indices) {
+            dismissBubble()
+            return
+        }
+        switchBubble(current, all[target].fresh())
+    }
+
+    /** Closes [current] quickly and opens [next] in its place - the next in reading order, or a tapped one. */
+    private suspend fun switchBubble(current: BubbleOverlay, next: BubbleOverlay) {
+        val w = width
+        val h = height
         // The open one drops back quickly, then the next rises as a fresh one would.
         bubbleJob?.cancel()
         Animatable(current.progress).animateTo(0f, animationSpec = tween(120, easing = FastOutSlowInEasing)) {
@@ -323,16 +389,16 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
             invalidate()
         }
         if (bubble !== current) return
-        bubble = found
+        bubble = next
         releaseBubble(current)
         runCatching {
-            WebGpuRenderer.withContext { BubbleZoom.prepare(found, w, h) }
+            WebGpuRenderer.withContext { BubbleZoom.prepare(next, w, h) }
             BubbleZoom.awaitPrepared()
         }.onFailure {
             if (it is CancellationException) throw it
             Log.w("ImageViewerState", "Bubble preparation failed", it)
         }
-        if (bubble === found) animateBubble(found, 1f)
+        if (bubble === next) animateBubble(next, 1f)
     }
 
     /**
@@ -387,6 +453,8 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
 
     /** Drops the open bubble at once, for a page that is going away. */
     private fun dropBubble() {
+        sequence = null
+        sequencePage = null
         val current = bubble ?: return
         bubbleJob?.cancel()
         bubble = null

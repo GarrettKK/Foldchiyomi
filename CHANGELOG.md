@@ -2,7 +2,13 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
-## [v1.6.0] - Unreleased
+## [v1.7.0] - Unreleased
+
+### Added
+- **Swipe from bubble to bubble.** With a bubble open, swipe up for the next one and down for the previous, in reading order: right to left for manga, left to right for comics, panel by panel. Past the last one, it closes. The order is read off the page's panels, so an unusual layout can trip it; a tap on any bubble puts it right.
+- **Bottom edge menu**, a new tap zone layout: only the bottom edge of the screen opens the menu, and a tap anywhere else does nothing. For reading with bubble zoom and no tap-to-turn, where a missed bubble used to bring the menu up.
+
+## [v1.6.0] - 2026-10-15
 
 ### Added
 - **Zoom to panel.** Settings → Reader → Paged → Zoom to panel, or the switch in the reader's sheet. The bubble gesture on artwork then zooms the page to frame the panel under it; another one zooms back out. It finds panels by the white gutters between them, so it skips borderless panels and dark pages, where it zooms in as usual.
