@@ -2,7 +2,14 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
-## [v1.7.0] - Unreleased
+## [v1.7.1] - Unreleased
+
+### Fixed
+- **Swiping through bubbles picked up faces, gloves and other white bits of the art.** A bubble found for the sequence now has to hold lettering: a few marks of about one height, side by side. Tapping a bubble is unchanged.
+- **Swiping from a tapped bubble jumped elsewhere** when the sequence hadn't found that bubble itself. It is now placed in the order like the rest.
+- **Swipe down for the next bubble**, up for the previous: reading runs down the page.
+
+## [v1.7.0] - 2026-10-15
 
 ### Added
 - **Swipe from bubble to bubble.** With a bubble open, swipe up for the next one and down for the previous, in reading order: right to left for manga, left to right for comics, panel by panel. Past the last one, it closes. The order is read off the page's panels, so an unusual layout can trip it; a tap on any bubble puts it right.
