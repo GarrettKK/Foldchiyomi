@@ -2,7 +2,7 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
-## [v1.7.1] - Unreleased
+## [v1.7.1] - 2026-10-16
 
 ### Fixed
 - **Swiping through bubbles picked up faces, gloves and other white bits of the art.** A bubble found for the sequence now has to hold lettering: a few marks of about one height, side by side. Tapping a bubble is unchanged.
