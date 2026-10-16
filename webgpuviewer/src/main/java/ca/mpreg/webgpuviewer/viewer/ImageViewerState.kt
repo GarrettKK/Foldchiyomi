@@ -324,13 +324,15 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
     private var sequence: List<BubbleOverlay>? = null
     private var sequencePage: ImagePage? = null
 
-    private suspend fun sequenceFor(page: ImagePage.ImageSingle): List<BubbleOverlay> {
-        sequence?.takeIf { sequencePage === page }?.let { return it }
+    private suspend fun sequenceFor(page: ImagePage.ImageSingle, current: BubbleOverlay): List<BubbleOverlay> {
+        // Cached, unless the open bubble isn't in it: then it is placed in the order as well.
+        sequence?.takeIf { sequencePage === page && it.any { b -> b === current || b.rect.contentEquals(current.rect) } }
+            ?.let { return it }
         val w = width
         val h = height
         val found = if (w > 0 && h > 0) {
             withContext(Dispatchers.Default) {
-                runCatching { BubbleZoom.detectAll(page, w, h, isReversed) }
+                runCatching { BubbleZoom.detectAll(page, w, h, isReversed, include = current) }
                     .onFailure { Log.w("ImageViewerState", "Bubble sequence failed", it) }
                     .getOrDefault(emptyList())
             }
@@ -351,25 +353,17 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         val current = bubble ?: return
         if (current.progress < 1f) return
         val page = current.page
-        val all = sequenceFor(page)
+        val all = sequenceFor(page, current)
         if (bubble !== current) return
         if (all.isEmpty() || getPage(0) !== page || pageOffset != 0f) {
             dismissBubble()
             return
         }
-        // The open bubble may have been found by a tap rather than from the sequence: its
-        // place is the sequence bubble it overlaps most, or the nearest to it.
-        fun overlap(a: FloatArray, b: FloatArray): Float {
-            val ix = (min(a[2], b[2]) - max(a[0], b[0])).coerceAtLeast(0f)
-            val iy = (min(a[3], b[3]) - max(a[1], b[1])).coerceAtLeast(0f)
-            return ix * iy
-        }
-        var at = all.indices.maxByOrNull { overlap(all[it].rect, current.rect) } ?: 0
-        if (overlap(all[at].rect, current.rect) <= 0f) {
-            at = all.indices.minByOrNull {
-                abs(all[it].centerX - current.centerX) + abs(all[it].centerY - current.centerY)
-            } ?: 0
-        }
+        // The open bubble is in the order, itself or as the sequence's own find of it.
+        val at = all.indexOfFirst { it === current || it.rect.contentEquals(current.rect) }
+            .takeIf { it >= 0 } ?: all.indices.minByOrNull {
+            abs(all[it].centerX - current.centerX) + abs(all[it].centerY - current.centerY)
+        } ?: 0
         val target = at + delta
         if (target !in all.indices) {
             dismissBubble()

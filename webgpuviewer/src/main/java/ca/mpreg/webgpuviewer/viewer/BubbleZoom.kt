@@ -50,6 +50,7 @@ import ca.mpreg.webgpuviewer.renderer.setTransientBindGroup
 import ca.mpreg.webgpuviewer.renderer.submitAndRelease
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.coroutineScope
@@ -185,6 +186,11 @@ internal object BubbleZoom {
     /** Map pixels added around the bubble, so its own outline comes with it. */
     private const val OUTLINE = 2
 
+    /** What [lettered] asks of a bubble found for the sequence: marks, how alike, and in a row. */
+    private const val MIN_LETTERS = 3
+    private const val LETTER_UNIFORMITY = 0.5f
+    private const val MIN_ROW = 3
+
     /** Room around the bubble's bounds for [CLOSE] and [OUTLINE] to grow into. */
     private const val PAD = 4
 
@@ -242,6 +248,8 @@ internal object BubbleZoom {
         screenWidth: Int,
         screenHeight: Int,
         rightToLeft: Boolean,
+        /** A bubble to place in the order as well - the open one, found by a tap. */
+        include: BubbleOverlay? = null,
     ): List<BubbleOverlay> {
         class Placed(val overlay: BubbleOverlay, val panel: Int, val top: Int, val bottom: Int, val centerX: Int)
 
@@ -265,6 +273,20 @@ internal object BubbleZoom {
                 val cy = found.y0 + found.height / 2
                 val panel = panels.indexOfFirst { cx >= it[0] && cx < it[2] && cy >= it[1] && cy < it[3] }
                 placed += Placed(overlay, if (panel < 0) panels.size else panel, found.y0, found.y0 + found.height, cx)
+            }
+            if (include != null && include.centerX >= imageRect[0] && include.centerX < imageRect[2] &&
+                include.centerY >= imageRect[1] && include.centerY < imageRect[3] &&
+                placed.none { it.overlay.rect.contentEquals(include.rect) }
+            ) {
+                // Back from screen to map pixels, as the others were placed.
+                val sx = map.width / (imageRect[2] - imageRect[0])
+                val sy = map.height / (imageRect[3] - imageRect[1])
+                val cx = ((include.centerX - imageRect[0]) * sx).toInt()
+                val cy = ((include.centerY - imageRect[1]) * sy).toInt()
+                val top = ((include.rect[1] - imageRect[1]) * sy).toInt()
+                val bottom = ((include.rect[3] - imageRect[1]) * sy).toInt()
+                val panel = panels.indexOfFirst { cx >= it[0] && cx < it[2] && cy >= it[1] && cy < it[3] }
+                placed += Placed(include, if (panel < 0) panels.size else panel, top, bottom, cx)
             }
             // Within a panel: rows top to bottom, each row in reading direction. Two bubbles
             // share a row when their vertical spans overlap by most of the shorter one.
@@ -383,7 +405,7 @@ internal object BubbleZoom {
             }
             if (edge || tail > maxArea || tail < 200) continue
             if (x1 - x0 + 1 < 0.03f * w || y1 - y0 + 1 < 0.02f * h) continue
-            val found = find(map, brightest % w, brightest / w, openEdge) ?: continue
+            val found = find(map, brightest % w, brightest / w, openEdge, strict = true) ?: continue
             // The same bubble can surface twice where the adaptive threshold splits a patch.
             val duplicate = out.any { other ->
                 val ix = max(0, min(found.x0 + found.width, other.x0 + other.width) - max(found.x0, other.x0))
@@ -440,7 +462,7 @@ internal object BubbleZoom {
      * anything that doesn't look like a bubble - open to the page's edge, too big, too thin, or
      * with nothing written in it.
      */
-    fun find(map: InkMap, x: Int, y: Int, openEdge: Int = NO_EDGE): Found? {
+    fun find(map: InkMap, x: Int, y: Int, openEdge: Int = NO_EDGE, strict: Boolean = false): Found? {
         val w = map.width
         val h = map.height
 
@@ -525,6 +547,9 @@ internal object BubbleZoom {
         val ink = (filledArea - paperArea).toFloat() / filledArea
         if (ink < MIN_INK || ink > MAX_INK) return null
         if (largestMark(shape, outside, outW, outH) > MAX_MARK * filledArea) return null
+        // For the sequence, which tries every patch of paper rather than what a finger chose:
+        // what is written in it has to look like lettering, not a face or a glove.
+        if (strict && !lettered(shape, outside, outW, outH)) return null
 
         // Closed over the notches lettering bites out of it, then filled again.
         val solid = BooleanArray(outW * outH) { !outside[it] }
@@ -632,6 +657,69 @@ internal object BubbleZoom {
             src = vertical
         }
         return ByteArray(src.size) { (src[it] * 255f + 0.5f).toInt().coerceIn(0, 255).toByte() }
+    }
+
+    /**
+     * Whether the marks inside the bubble read as lettering: at least [MIN_LETTERS] of them,
+     * most about one height, and at least three side by side in a row. A face has an eye or
+     * two, a glove a few long strokes; a line of text has neither's shape.
+     */
+    private fun lettered(paper: BooleanArray, outside: BooleanArray, w: Int, h: Int): Boolean {
+        val seen = BooleanArray(w * h)
+        val queue = IntArray(w * h)
+        val heights = ArrayList<Int>()
+        val centers = ArrayList<Float>()
+        for (start in paper.indices) {
+            if (paper[start] || outside[start] || seen[start]) continue
+            var head = 0
+            var tail = 0
+            seen[start] = true
+            queue[tail++] = start
+            var y0 = h
+            var y1 = -1
+            while (head < tail) {
+                val i = queue[head++]
+                val x = i % w
+                val y = i / w
+                if (y < y0) y0 = y
+                if (y > y1) y1 = y
+                for (n in intArrayOf(
+                    if (x > 0) i - 1 else -1,
+                    if (x < w - 1) i + 1 else -1,
+                    if (y > 0) i - w else -1,
+                    if (y < h - 1) i + w else -1,
+                )) {
+                    if (n < 0 || paper[n] || outside[n] || seen[n]) continue
+                    seen[n] = true
+                    queue[tail++] = n
+                }
+            }
+            // A speck is not a letter.
+            if (tail < 3) continue
+            heights += y1 - y0 + 1
+            centers += (y0 + y1) * 0.5f
+        }
+        if (heights.size < MIN_LETTERS) return false
+        val median = heights.sorted()[heights.size / 2].toFloat()
+        val alike = heights.count { it >= 0.5f * median && it <= 1.7f * median }
+        if (alike < LETTER_UNIFORMITY * heights.size) return false
+        // Rows: marks whose centres sit within most of a letter's height of each other.
+        val order = centers.indices.sortedBy { centers[it] }
+        var longestRow = 0
+        var rowStart = 0
+        var rowSum = 0f
+        var rowCount = 0
+        for (i in order) {
+            if (rowCount > 0 && abs(centers[i] - rowSum / rowCount) > 0.6f * median) {
+                longestRow = max(longestRow, rowCount)
+                rowSum = 0f
+                rowCount = 0
+            }
+            rowSum += centers[i]
+            rowCount++
+        }
+        longestRow = max(longestRow, rowCount)
+        return longestRow >= MIN_ROW
     }
 
     /** Size of the largest connected mark inside the bubble: filled in, but not its paper. */
