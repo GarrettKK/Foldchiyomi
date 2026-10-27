@@ -230,6 +230,8 @@ dependencies {
     implementation(libs.androidx.compose.uiUtil)
 
     implementation(libs.androidx.interpolator)
+    // The cover on the cover screen: Android 14's dual-screen mode - see CoverScreenCover.
+    implementation(libs.androidx.window)
 
     implementation(libs.androidx.paging.runtime)
     implementation(libs.androidx.paging.compose)

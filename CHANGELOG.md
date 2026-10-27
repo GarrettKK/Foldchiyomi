@@ -5,6 +5,7 @@ All notable changes to Foldchiyomi are documented here. For the changes it inher
 ## [v1.8.0] - Unreleased
 
 ### Added
+- **The cover on the cover screen.** While the phone lies open, its outer screen shows the cover of what you're reading, like a book's cover facing out. Off by default: **Settings → Reader → Cover on the cover screen**. It uses Android 14's dual-screen mode, so it needs a foldable that offers its outer screen to apps; the phone takes the screen back when it folds or saves power.
 - **Page turn sound.** A soft paper flip as a page turns over, off by default: **Settings → Reader → Paged → Page turn sound**, or the reader's settings sheet. It plays as a system sound, so silent mode mutes it.
 
 ## [v1.7.1] - 2026-10-16

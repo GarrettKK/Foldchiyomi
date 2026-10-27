@@ -52,6 +52,10 @@ Don't want it? Turn it off in **Settings → Reader → Paged → Bubble zoom**,
 
 Open a series for the first time and the reader asks how it reads, right to left for manga or left to right for comics, and remembers it for that series.
 
+## The cover on the cover screen
+
+Turn on **Settings → Reader → Cover on the cover screen** and, while the phone lies open, its outer screen shows the cover of what you're reading, like a book's cover facing out. It uses Android 14's dual-screen mode, so it needs a foldable that offers its outer screen to apps (Galaxy Z Fold from the Fold5 up, and the Pixel Fold); the phone takes the screen back when it folds or saves power.
+
 ## The icon
 
 An open book of panels, and a speech bubble saying 折 (*ori*), "to fold": the fold of the phone, and the fold of the page. The icon was designed by a reader from the community, who offered it after trying the app.

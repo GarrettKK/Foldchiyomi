@@ -64,6 +64,11 @@ object SettingsReaderScreen : SearchableSettings {
                 preference = readerPref.pageTransitions,
                 title = stringResource(MR.strings.pref_page_transitions),
             ),
+            Preference.PreferenceItem.SwitchPreference(
+                preference = readerPref.coverScreenCover,
+                title = stringResource(MR.strings.pref_cover_screen_cover),
+                subtitle = stringResource(MR.strings.pref_cover_screen_cover_summary),
+            ),
             getDisplayGroup(readerPreferences = readerPref),
             getEInkGroup(readerPreferences = readerPref),
             getReadingGroup(readerPreferences = readerPref),

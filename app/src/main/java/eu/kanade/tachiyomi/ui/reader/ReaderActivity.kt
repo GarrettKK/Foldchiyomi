@@ -131,6 +131,9 @@ class ReaderActivity : BaseActivity() {
      */
     private var config: ReaderConfig? = null
 
+    /** The cover on the phone's cover screen while it lies open - see [CoverScreenCover]. */
+    private var coverScreenCover: CoverScreenCover? = null
+
     private var menuToggleToast: Toast? = null
     private var readingModeToast: Toast? = null
     private val displayRefreshHost = DisplayRefreshHost()
@@ -184,6 +187,7 @@ class ReaderActivity : BaseActivity() {
 
         config = ReaderConfig()
         setMenuVisibility(viewModel.state.value.menuVisible)
+        coverScreenCover = CoverScreenCover(this, readerPreferences)
 
         // Finish when incognito mode is disabled
         preferences.incognitoMode.changes()
