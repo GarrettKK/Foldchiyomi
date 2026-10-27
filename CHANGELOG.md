@@ -2,7 +2,12 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
-## [v1.8.1] - Unreleased
+## [v1.8.2] - Unreleased
+
+### Fixed
+- **The cover on the cover screen crashed the reader** when the phone took the outer screen back and offered it again, as around the notification shade or an app switch: the new window sometimes came before its display. It is now tried again a moment later instead.
+
+## [v1.8.1] - 2026-10-27
 
 ### Fixed
 - **The reader crashed on opening in 1.8.0**, on every device. The WebGPU library the build pulls in had been republished upstream with a native library that no longer matched its classes; the build now carries its own, checked copy.
