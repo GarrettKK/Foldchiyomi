@@ -279,6 +279,11 @@ object SettingsReaderScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_panel_zoom),
                     subtitle = stringResource(MR.strings.pref_panel_zoom_summary),
                 ).takeIf { webGpu },
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = readerPreferences.pageTurnSound,
+                    title = stringResource(MR.strings.pref_page_turn_sound),
+                    subtitle = stringResource(MR.strings.pref_page_turn_sound_summary),
+                ).takeIf { webGpu },
                 Preference.PreferenceItem.ListPreference(
                     preference = readerPreferences.dualPageView,
                     entries = ReaderPreferences.DualPageView.entries.associateWith { stringResource(it.titleRes) },

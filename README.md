@@ -28,6 +28,7 @@ Nothing else like it exists right now: page curls in other readers are canned an
 - **Real shadows.** The rolled paper casts a shadow on the page it uncovers, and the folded flap casts one on the page beneath it.
 - **Every direction.** Going back plays the same curl in reverse, right-to-left manga is mirrored, and taps or volume keys curl the page from the bottom corner.
 - **Native and fast.** It runs entirely on the GPU (WebGPU via Dawn) inside the reader's own renderer, not as a video overlay or a screenshot trick. That keeps it smooth at your screen's full refresh rate.
+- **Sound, if you like.** A soft paper flip with every turn, off by default. It plays as a system sound, so silent mode keeps it quiet.
 
 It is the default page transition. You can pick another one, or turn animations off, in the reader settings.
 

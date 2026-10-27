@@ -2,6 +2,11 @@
 
 All notable changes to Foldchiyomi are documented here. For the changes it inherits from Mihon, see [Mihon's changelog](https://github.com/mihonapp/mihon/blob/main/CHANGELOG.md).
 
+## [v1.8.0] - Unreleased
+
+### Added
+- **Page turn sound.** A soft paper flip as a page turns over, off by default: **Settings → Reader → Paged → Page turn sound**, or the reader's settings sheet. It plays as a system sound, so silent mode mutes it.
+
 ## [v1.7.1] - 2026-10-16
 
 ### Fixed

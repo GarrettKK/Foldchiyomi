@@ -525,6 +525,7 @@ fun ImageViewer(
                             state.pageOffset < -0.5f && state.havePrev -> -1f
                             else -> 0f
                         }
+                        if (target != 0f) state.onPageTurn?.runCatching { invoke() }
 
                         state.animationJob = scope.launch {
                             val anim = Animatable(state.pageOffset)

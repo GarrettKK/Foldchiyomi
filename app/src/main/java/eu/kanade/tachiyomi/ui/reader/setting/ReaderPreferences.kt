@@ -228,6 +228,9 @@ class ReaderPreferences(
     val bubbleZoomGesture: Preference<BubbleZoomGesture> =
         preferenceStore.getEnum("webgpu_bubble_zoom_gesture", BubbleZoomGesture.DOUBLE_TAP)
 
+    /** A soft paper flip on every page turn. */
+    val pageTurnSound: Preference<Boolean> = preferenceStore.getBoolean("webgpu_page_turn_sound", false)
+
     val cutoutModeDual: Preference<CutoutMode> = preferenceStore.getEnum("webgpu_dual_cutout_mode", CutoutMode.IGNORE)
 
     val continuousMinWidth: Preference<Int> = preferenceStore.getInt("webgpu_continuous_minwidth", 100)
