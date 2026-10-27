@@ -165,6 +165,9 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
 
             if (pageDelta != 0) {
                 dropBubble()
+                // Dragged all the way over: the turn that a release or a tap reports happened
+                // under the finger instead.
+                if (turnHeld) onPageTurn?.runCatching { invoke() }
                 onPageChange?.runCatching { invoke(if (isReversed) -pageDelta else pageDelta) }
             }
 
@@ -192,6 +195,7 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
         dropBubble()
         turnHeld = false
         turnAuto = true
+        onPageTurn?.runCatching { invoke() }
         animationJob = scope?.launch {
             setPageOffsetDirect(direction.toFloat())
             invalidate()
@@ -223,6 +227,13 @@ open class ImageViewerState(var isVertical: Boolean = false, var isReversed: Boo
     var onRenderUnavailable: ((String?) -> Unit)? = null
 
     var onPageChange: ((Int) -> Unit)? = null
+
+    /**
+     * A page is turning over: let go past the middle, sent by a tap or key, or dragged all the
+     * way. Once per turn, as it starts - for a sound to go with the motion. A drag let go short
+     * of the middle settles back and isn't one.
+     */
+    var onPageTurn: (() -> Unit)? = null
     var onTap: ((Offset) -> Unit)? = null
     var onLongTap: ((Offset) -> Unit)? = null
 

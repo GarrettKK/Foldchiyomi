@@ -22,6 +22,9 @@ class ReaderPreferences(
 
     val pageTransitions: Preference<Boolean> = preferenceStore.getBoolean("pref_enable_transitions_key", true)
 
+    /** The cover of what you're reading on the phone's cover screen while it lies open. */
+    val coverScreenCover: Preference<Boolean> = preferenceStore.getBoolean("pref_cover_screen_cover", false)
+
     val flashOnPageChange: Preference<Boolean> = preferenceStore.getBoolean("pref_reader_flash", false)
 
     val flashDurationMillis: Preference<Int> = preferenceStore.getInt("pref_reader_flash_duration", MILLI_CONVERSION)
@@ -227,6 +230,9 @@ class ReaderPreferences(
     /** Which gesture opens a bubble. */
     val bubbleZoomGesture: Preference<BubbleZoomGesture> =
         preferenceStore.getEnum("webgpu_bubble_zoom_gesture", BubbleZoomGesture.DOUBLE_TAP)
+
+    /** A soft paper flip on every page turn. */
+    val pageTurnSound: Preference<Boolean> = preferenceStore.getBoolean("webgpu_page_turn_sound", false)
 
     val cutoutModeDual: Preference<CutoutMode> = preferenceStore.getEnum("webgpu_dual_cutout_mode", CutoutMode.IGNORE)
 

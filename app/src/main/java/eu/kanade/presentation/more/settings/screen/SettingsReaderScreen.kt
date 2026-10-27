@@ -64,6 +64,11 @@ object SettingsReaderScreen : SearchableSettings {
                 preference = readerPref.pageTransitions,
                 title = stringResource(MR.strings.pref_page_transitions),
             ),
+            Preference.PreferenceItem.SwitchPreference(
+                preference = readerPref.coverScreenCover,
+                title = stringResource(MR.strings.pref_cover_screen_cover),
+                subtitle = stringResource(MR.strings.pref_cover_screen_cover_summary),
+            ),
             getDisplayGroup(readerPreferences = readerPref),
             getEInkGroup(readerPreferences = readerPref),
             getReadingGroup(readerPreferences = readerPref),
@@ -278,6 +283,11 @@ object SettingsReaderScreen : SearchableSettings {
                     preference = readerPreferences.panelZoom,
                     title = stringResource(MR.strings.pref_panel_zoom),
                     subtitle = stringResource(MR.strings.pref_panel_zoom_summary),
+                ).takeIf { webGpu },
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = readerPreferences.pageTurnSound,
+                    title = stringResource(MR.strings.pref_page_turn_sound),
+                    subtitle = stringResource(MR.strings.pref_page_turn_sound_summary),
                 ).takeIf { webGpu },
                 Preference.PreferenceItem.ListPreference(
                     preference = readerPreferences.dualPageView,

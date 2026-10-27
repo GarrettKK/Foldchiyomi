@@ -103,6 +103,9 @@ open class WebGpuViewer(
     @Volatile
     private var cachedBackgroundColor: Int? = null
 
+    /** Loaded only while the setting is on - see [PageTurnSound]. */
+    private var pageTurnSound: PageTurnSound? = null
+
     @Volatile
     private var cachedOnBackgroundColor: Int? = null
 
@@ -1055,6 +1058,23 @@ open class WebGpuViewer(
         applyDoubleTap()
         config.doubleTapChangedListener = ::applyDoubleTap
 
+        fun applyPageTurnSound() {
+            if (config.pageTurnSound) {
+                if (pageTurnSound == null) pageTurnSound = PageTurnSound(activity)
+            } else {
+                pageTurnSound?.release()
+                pageTurnSound = null
+            }
+        }
+        applyPageTurnSound()
+        config.pageTurnSoundChangedListener = ::applyPageTurnSound
+        // Paged only, and not while the slider scrubs through pages: that is one move, not a
+        // flip per step. isContinuous is read here, not above: a subclass's override isn't set
+        // yet while this init runs.
+        pager.state.onPageTurn = {
+            if (!isContinuous && !activity.isScrollingThroughPages) pageTurnSound?.play()
+        }
+
         config.imagePropertyChangedListener = {
             // A theme change comes through here.
             cachedBackgroundColor = null
@@ -1141,6 +1161,8 @@ open class WebGpuViewer(
         // Before the interrupt: taken mid-decode, only the flag stops the worker parking.
         destroyed = true
         scope.cancel()
+        pageTurnSound?.release()
+        pageTurnSound = null
 
         // shutdownNow interrupts the worker out of lock.wait().
         decodeExecutor.shutdownNow()

@@ -28,6 +28,7 @@ Nothing else like it exists right now: page curls in other readers are canned an
 - **Real shadows.** The rolled paper casts a shadow on the page it uncovers, and the folded flap casts one on the page beneath it.
 - **Every direction.** Going back plays the same curl in reverse, right-to-left manga is mirrored, and taps or volume keys curl the page from the bottom corner.
 - **Native and fast.** It runs entirely on the GPU (WebGPU via Dawn) inside the reader's own renderer, not as a video overlay or a screenshot trick. That keeps it smooth at your screen's full refresh rate.
+- **Sound, if you like.** A soft paper flip with every turn, off by default. It plays as a system sound, so silent mode keeps it quiet.
 
 It is the default page transition. You can pick another one, or turn animations off, in the reader settings.
 
@@ -50,6 +51,10 @@ Don't want it? Turn it off in **Settings → Reader → Paged → Bubble zoom**,
 ## Made for a mixed library
 
 Open a series for the first time and the reader asks how it reads, right to left for manga or left to right for comics, and remembers it for that series.
+
+## The cover on the cover screen
+
+Turn on **Settings → Reader → Cover on the cover screen** and, while the phone lies open, its outer screen shows the cover of what you're reading, like a book's cover facing out. It uses Android 14's dual-screen mode, so it needs a foldable that offers its outer screen to apps (Galaxy Z Fold from the Fold5 up, and the Pixel Fold); the phone takes the screen back when it folds or saves power.
 
 ## The icon
 
