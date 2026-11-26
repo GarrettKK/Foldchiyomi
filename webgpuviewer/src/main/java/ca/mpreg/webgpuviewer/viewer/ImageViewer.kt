@@ -509,22 +509,40 @@ fun ImageViewer(
 
                     if (pageTurning) {
                         val velocity = velocityTracker.calculateVelocity()
+                        val axisSize = (if (state.isVertical) state.height else state.width).toFloat()
                         // Always raw, matching panAmount above - see that comment.
-                        val initialVelocity =
-                            if (state.isVertical) -velocity.y / state.height else -velocity.x / state.width
+                        val axisVelocity = if (state.isVertical) -velocity.y else -velocity.x
+                        val paused = (lastEventTime - lastMoveTime) >= 100
+                        val releaseVelocity = if (paused) 0f else axisVelocity
+                        val initialVelocity = releaseVelocity / axisSize
 
-                        // Flicking opposite to current direction = go back to 0
-                        val flickingOpposite =
-                            (state.pageOffset > 0f && initialVelocity < -0.5f) || (state.pageOffset < 0f && initialVelocity > 0.5f)
-
-                        val target = when {
-                            flickingOpposite -> 0f
-                            initialVelocity > 1f && state.haveNext -> 1f
-                            initialVelocity < -1f && state.havePrev -> -1f
-                            state.pageOffset > 0.5f && state.haveNext -> 1f
-                            state.pageOffset < -0.5f && state.havePrev -> -1f
+                        // Thresholds in dp rather than screen widths so wide foldables and tall
+                        // vertical viewports match a phone's feel, and a slow reading drag turns
+                        // the page instead of snapping back once it has clearly committed.
+                        val dp = density.density
+                        val dir = when {
+                            state.pageOffset > 0f -> 1f
+                            state.pageOffset < 0f -> -1f
                             else -> 0f
                         }
+                        val forwardOffset = abs(state.pageOffset)
+                        val forwardVelocity = releaseVelocity * dir
+                        val forwardDragPx = forwardOffset * axisSize
+
+                        val canTurn = when {
+                            dir > 0f -> state.haveNext
+                            dir < 0f -> state.havePrev
+                            else -> false
+                        }
+                        val flickingOpposite = forwardVelocity < -120f * dp
+                        val committed = when {
+                            !canTurn || flickingOpposite -> false
+                            forwardVelocity > 300f * dp -> true
+                            forwardDragPx > 48f * dp && forwardVelocity > minFlingVelocity -> true
+                            forwardOffset > 0.25f -> true
+                            else -> false
+                        }
+                        val target = if (committed) dir else 0f
                         if (target != 0f) state.onPageTurn?.runCatching { invoke() }
 
                         state.animationJob = scope.launch {
